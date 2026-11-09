@@ -455,6 +455,10 @@ Implementa Docker y Kubernetes para PRE y PRO:
   - PRO: frontend `8098`, API directa `8091`, perfil `prod`, TTL `5m`.
   - Mismo comportamiento que local: `SEED_MOCK_DATA=true`, consola H2, Swagger y reset disponibles.
   - Cada entorno usa su propio proyecto, red y volumen H2.
+- `deploy/docker/construir.ps1`: construye backend y frontend para un entorno leyendo
+  `deploy/docker/.env.<entorno>` y permite publicar en un registro con `-Registro`. Documenta también
+  los comandos `docker build` directos, el contexto en la raíz del repositorio, cuándo reconstruir
+  cada imagen y los problemas frecuentes.
 - `deploy/k8s/base`: ConfigMap, PVC, Deployments, Services e Ingress comunes.
 - `deploy/k8s/overlays/pre`: namespace `pruebasopencode1-pre`, perfil `pre`, host y TLS de PRE.
 - `deploy/k8s/overlays/pro`: namespace `pruebasopencode1-pro`, perfil `prod`, 2 réplicas de frontend,

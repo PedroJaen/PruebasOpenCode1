@@ -27,28 +27,84 @@ deploy/
 
 ## Docker: construir las imágenes
 
-Requisitos: Docker Desktop o Docker Engine con Compose v2.
+Requisitos: Docker Desktop o Docker Engine con Compose v2 en funcionamiento. No hace falta JDK ni
+Node en el host: la compilación ocurre dentro de las etapas multi-stage. Ejecutar siempre desde la
+raíz del repositorio.
+
+### 1. Preparar los entornos
 
 ```powershell
 Copy-Item deploy\docker\.env.pre.example deploy\docker\.env.pre
-# Cambiar los secretos de .env.pre antes de usar la imagen
-.\deploy\docker\construir.ps1 -Entorno pre
+Copy-Item deploy\docker\.env.pro.example deploy\docker\.env.pro
 ```
 
-También se puede publicar en un registro:
+Cambiar los secretos de ambos ficheros. Están excluidos de Git y no se copian dentro de las imágenes.
+
+### 2. Construir con el script recomendado
 
 ```powershell
-.\deploy\docker\construir.ps1 -Entorno pro -Registro ghcr.io/pedrojaen
+powershell -ExecutionPolicy Bypass -File .\deploy\docker\construir.ps1 -Entorno pre
+powershell -ExecutionPolicy Bypass -File .\deploy\docker\construir.ps1 -Entorno pro
 ```
 
-Las imágenes resultantes son:
+Se generan cuatro etiquetas:
 
 - `pruebasopencode1-back:pre` / `pruebasopencode1-back:pro`
 - `pruebasopencode1-front:pre` / `pruebasopencode1-front:pro`
 
-La imagen del backend es la misma para ambos entornos; el perfil, la base de datos, CORS y los
-secretos se inyectan en tiempo de ejecución. La imagen del frontend incorpora en el bundle las
-credenciales `VITE_AUTH_*`, por lo que se construye una etiqueta por entorno.
+El backend es la misma imagen para ambos entornos; la etiqueta `:pro` sirve para publicarla por
+separado. Si no se quiere recompilar dos veces:
+
+```powershell
+docker tag pruebasopencode1-back:pre pruebasopencode1-back:pro
+```
+
+El frontend debe construirse por entorno porque `VITE_AUTH_*` se incrusta en el bundle.
+
+### 3. Construir con `docker build` directamente
+
+Backend:
+
+```powershell
+docker build -f deploy/docker/back.Dockerfile -t pruebasopencode1-back:pre .
+```
+
+Frontend:
+
+```powershell
+docker build -f deploy/docker/front.Dockerfile `
+  --build-arg VITE_API_BASE_URL=/api/v1 `
+  --build-arg VITE_AUTH_USERNAME=demo `
+  --build-arg VITE_AUTH_PASSWORD=demo1234 `
+  -t pruebasopencode1-front:pre .
+```
+
+Para PRO, repetir con `:pro` y los valores de `.env.pro`. El contexto es la raíz del repositorio
+(`.`), no `deploy/docker`, porque los Dockerfiles copian `back/`, `front/`, `docs/`, `scripts/` y
+`AGENTS.md`.
+
+### 4. Comprobar y publicar
+
+```powershell
+docker images --filter "reference=pruebasopencode1-*"
+docker image inspect pruebasopencode1-back:pre --format "{{.Config.User}}"
+docker image inspect pruebasopencode1-front:pre --format "{{json .Config.ExposedPorts}}"
+```
+
+El backend debe usar el usuario `app` y ambas imágenes exponer `8080/tcp`. Para publicar en un
+registro:
+
+```powershell
+docker login ghcr.io
+powershell -ExecutionPolicy Bypass -File .\deploy\docker\construir.ps1 -Entorno pre -Registro ghcr.io/pedrojaen
+docker push ghcr.io/pedrojaen/pruebasopencode1-back:pre
+docker push ghcr.io/pedrojaen/pruebasopencode1-front:pre
+```
+
+En Kubernetes hay que ajustar `images.newName` del overlay al nombre publicado.
+
+La guía ampliada, la tabla de cuándo reconstruir y los problemas frecuentes están en
+[`docs/DESPLIEGUE.md`](../docs/DESPLIEGUE.md#43-construcción-de-las-imágenes).
 
 ## Docker Compose: PRE y PRO
 

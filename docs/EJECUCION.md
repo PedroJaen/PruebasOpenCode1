@@ -350,6 +350,40 @@ Valida los Dockerfiles, Nginx, Docker Compose PRE/PRO y los overlays Kustomize. 
 de Docker arrancado ni un clúster. El resultado esperado es **43/43 comprobaciones** y el informe
 `deploy/verificacion-despliegue.json`.
 
+### 4.7 Construir las imágenes Docker
+
+Requisitos: Docker Desktop o Docker Engine con Compose v2. No hace falta JDK ni Node en el host.
+Ejecutar desde la raíz del repositorio.
+
+```powershell
+# 1. Preparar la configuración de cada entorno y cambiar los secretos
+Copy-Item deploy\docker\.env.pre.example deploy\docker\.env.pre
+Copy-Item deploy\docker\.env.pro.example deploy\docker\.env.pro
+
+# 2. Construir las cuatro etiquetas
+powershell -ExecutionPolicy Bypass -File .\deploy\docker\construir.ps1 -Entorno pre
+powershell -ExecutionPolicy Bypass -File .\deploy\docker\construir.ps1 -Entorno pro
+
+# 3. Comprobar las imágenes
+docker images --filter "reference=pruebasopencode1-*"
+```
+
+Construcción directa sin los scripts:
+
+```powershell
+docker build -f deploy/docker/back.Dockerfile -t pruebasopencode1-back:pre .
+
+docker build -f deploy/docker/front.Dockerfile `
+  --build-arg VITE_API_BASE_URL=/api/v1 `
+  --build-arg VITE_AUTH_USERNAME=demo `
+  --build-arg VITE_AUTH_PASSWORD=demo1234 `
+  -t pruebasopencode1-front:pre .
+```
+
+El contexto siempre es `.` (raíz del repositorio). Para PRO se repiten los comandos con `:pro` y los
+valores de `.env.pro`. La guía completa, la publicación en un registro y los problemas frecuentes
+están en [`DESPLIEGUE.md`](DESPLIEGUE.md#43-construcción-de-las-imágenes).
+
 ## 5. Variables de entorno
 
 ### 5.1 Backend

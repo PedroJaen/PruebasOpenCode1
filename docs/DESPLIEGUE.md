@@ -133,21 +133,131 @@ Características:
 - `/healthz` para sondas.
 - Cabeceras de seguridad, caché de assets con hash y `no-cache` para `index.html`.
 
-### 4.3 Construcción
+### 4.3 Construcción de las imágenes
+
+#### Requisitos
+
+- Docker Desktop o Docker Engine con Compose v2 en funcionamiento.
+- Conexión a Internet en la primera construcción para descargar las imágenes base y las dependencias.
+- Ejecutar los comandos desde la **raíz del repositorio**.
+- No hace falta JDK ni Node instalados en el host: las dos imágenes se construyen en etapas
+  multi-stage dentro de Docker.
+- Un fichero `.env.<entorno>` con las credenciales. El frontend incrusta `VITE_AUTH_USERNAME` y
+  `VITE_AUTH_PASSWORD` en el bundle al construir.
+
+#### Paso 1: preparar la configuración de cada entorno
 
 ```powershell
 Copy-Item deploy\docker\.env.pre.example deploy\docker\.env.pre
-.\deploy\docker\construir.ps1 -Entorno pre
-
 Copy-Item deploy\docker\.env.pro.example deploy\docker\.env.pro
-.\deploy\docker\construir.ps1 -Entorno pro
 ```
 
-Con registro:
+Editar los secretos de ambos ficheros. Están excluidos de Git y de `.dockerignore`; no se copian
+dentro de las imágenes.
+
+#### Paso 2: construir con el script (recomendado)
 
 ```powershell
-.\deploy\docker\construir.ps1 -Entorno pro -Registro ghcr.io/pedrojaen
+powershell -ExecutionPolicy Bypass -File .\deploy\docker\construir.ps1 -Entorno pre
+powershell -ExecutionPolicy Bypass -File .\deploy\docker\construir.ps1 -Entorno pro
 ```
+
+El script lee `deploy/docker/.env.<entorno>`, construye el backend y el frontend y genera estas
+etiquetas:
+
+- `pruebasopencode1-back:pre` y `pruebasopencode1-front:pre`.
+- `pruebasopencode1-back:pro` y `pruebasopencode1-front:pro`.
+
+El backend usa el mismo código en ambos entornos; la etiqueta `:pro` existe para poder publicar y
+desplegar cada entorno por separado. Si se quiere evitar recompilarlo dos veces:
+
+```powershell
+docker tag pruebasopencode1-back:pre pruebasopencode1-back:pro
+```
+
+El frontend **sí** debe construirse una vez por entorno, porque las variables `VITE_*` se incrustan
+en el bundle.
+
+#### Paso 3: construir con `docker build` directamente
+
+Backend:
+
+```powershell
+docker build -f deploy/docker/back.Dockerfile -t pruebasopencode1-back:pre .
+```
+
+Frontend:
+
+```powershell
+docker build -f deploy/docker/front.Dockerfile `
+  --build-arg VITE_API_BASE_URL=/api/v1 `
+  --build-arg VITE_AUTH_USERNAME=demo `
+  --build-arg VITE_AUTH_PASSWORD=demo1234 `
+  -t pruebasopencode1-front:pre .
+```
+
+Para PRO se repiten los comandos con `-t pruebasopencode1-front:pro` y los valores de
+`deploy/docker/.env.pro`.
+
+> El contexto del build es la raíz del repositorio (`.`). No usar `deploy/docker` como contexto: los
+> Dockerfiles copian `back/`, `front/`, `docs/`, `scripts/` y `AGENTS.md` desde la raíz.
+
+#### Paso 4: comprobar las imágenes
+
+```powershell
+docker images --filter "reference=pruebasopencode1-*"
+docker image inspect pruebasopencode1-back:pre --format "{{.Config.User}}"
+docker image inspect pruebasopencode1-front:pre --format "{{json .Config.ExposedPorts}}"
+```
+
+Resultados esperados:
+
+- El backend se ejecuta con el usuario `app` (UID 10001), no como root.
+- Backend y frontend exponen el puerto `8080/tcp`.
+- No hay ficheros `.env` ni secretos dentro de las imágenes.
+
+Después se pueden arrancar los contenedores:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy\docker\levantar.ps1 -Entorno pre
+docker compose --env-file deploy/docker/.env.pre -f deploy/docker/docker-compose.yml ps
+Invoke-RestMethod http://localhost:8081/actuator/health
+```
+
+#### Paso 5: publicar en un registro
+
+```powershell
+docker login ghcr.io
+powershell -ExecutionPolicy Bypass -File .\deploy\docker\construir.ps1 -Entorno pre -Registro ghcr.io/pedrojaen
+docker push ghcr.io/pedrojaen/pruebasopencode1-back:pre
+docker push ghcr.io/pedrojaen/pruebasopencode1-front:pre
+```
+
+En Kubernetes hay que ajustar `images.newName` del overlay al nombre publicado en el registro.
+
+#### Cuándo hay que reconstruir
+
+| Cambio | Imagen que hay que reconstruir |
+| --- | --- |
+| Código, `pom.xml` o configuración del backend | Backend |
+| Código del frontend, `package.json` o `package-lock.json` | Frontend |
+| `nginx.conf` | Frontend |
+| `README.md`, `AGENTS.md`, `docs/` o `scripts/` | Frontend, porque `npm run build` regenera `/documentacion` |
+| `VITE_API_BASE_URL`, `VITE_AUTH_USERNAME` o `VITE_AUTH_PASSWORD` | Frontend |
+| Variables de ejecución, secretos o perfil de Spring | Ninguna: se inyectan al arrancar |
+
+#### Problemas frecuentes
+
+| Problema | Solución |
+| --- | --- |
+| `No existe ...\.env.pre` | Copiar `.env.pre.example` a `.env.pre`. |
+| PowerShell bloquea el script | Usar `powershell -ExecutionPolicy Bypass -File ...` o los comandos `docker build` directos. |
+| `request returned 500` o el motor no responde | Abrir Docker Desktop y esperar a que el motor esté operativo. |
+| `failed to solve` al descargar imágenes base | Comprobar la conexión, el proxy o el DNS de Docker. |
+| `Define DB_USERNAME...` al arrancar | Faltan variables obligatorias en `.env.<entorno>`. |
+| Cambios que no aparecen | Reconstruir la imagen afectada y recrear: `docker compose ... up -d --force-recreate`. |
+| Puerto ocupado | Cambiar `FRONT_PORT` o `BACK_PORT` en `.env.<entorno>`. |
+| Imagen para otra arquitectura | Construir en la arquitectura destino o añadir `--platform linux/amd64`. |
 
 ## 5. Docker Compose para PRE y PRO
 

@@ -151,6 +151,11 @@ Copy-Item deploy\docker\.env.pro.example deploy\docker\.env.pro
 .\deploy\docker\levantar.ps1 -Entorno pro -Reconstruir
 ```
 
+La construcción paso a paso, los comandos `docker build` directos, la publicación en un registro y
+los problemas frecuentes están en
+[`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md#43-construcción-de-las-imágenes) y
+[`deploy/README.md`](deploy/README.md).
+
 Kubernetes:
 
 ```powershell
