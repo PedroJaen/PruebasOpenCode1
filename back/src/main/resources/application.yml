@@ -1,0 +1,66 @@
+spring:
+  application:
+    name: pruebasopencode1-back
+
+  # Perfil usado cuando no se indica SPRING_PROFILES_ACTIVE.
+  # Los perfiles disponibles son dev, test, pre y prod.
+  profiles:
+    default: dev
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+# Documentación interactiva de la API (Swagger UI).
+# UI:  http://localhost:8080/swagger-ui/index.html
+# JSON: http://localhost:8080/v3/api-docs
+springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_ENABLED:true}
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: ${SPRINGDOC_ENABLED:true}
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+  default-produces-media-type: application/json
+
+info:
+  app:
+    name: PruebasOpenCode1
+    description: API REST para la gestión de personas
+    version: 1.0.0
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+  mock-data:
+    seed-on-startup: ${SEED_MOCK_DATA:false}
+  auth:
+    # Credenciales del autologin transparente del frontend. En dev tienen
+    # valores de demostración; pre y prod exigen definirlas por entorno.
+    username: ${APP_AUTH_USERNAME:demo}
+    password: ${APP_AUTH_PASSWORD:demo1234}
+    role: ${APP_AUTH_ROLE:USER}
+    # Vigencia del token Bearer. El frontend lo renueva antes de que caduque.
+    token-ttl: ${APP_AUTH_TOKEN_TTL:15m}
+
+logging:
+  level:
+    com.pruebasopencode1: ${LOG_LEVEL:INFO}

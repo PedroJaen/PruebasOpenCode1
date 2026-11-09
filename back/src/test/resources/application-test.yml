@@ -1,0 +1,33 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:pruebasopencode1-test;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+    show-sql: false
+
+  h2:
+    console:
+      enabled: false
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+app:
+  cors:
+    allowed-origins: http://localhost:5173
+  mock-data:
+    seed-on-startup: false
+  auth:
+    username: demo
+    password: demo1234
+    role: USER
+    token-ttl: 15m

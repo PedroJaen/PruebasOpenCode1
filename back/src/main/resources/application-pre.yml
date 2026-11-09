@@ -1,0 +1,45 @@
+spring:
+  config:
+    activate:
+      on-profile: pre
+
+  datasource:
+    # Entorno PRE simulado en local. En un despliegue real, DB_URL apuntará a
+    # la base de datos gestionada del entorno.
+    url: ${DB_URL:jdbc:h2:file:./data/pre/pruebasopencode1-pre}
+    driver-class-name: org.h2.Driver
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    open-in-view: false
+    show-sql: false
+
+  h2:
+    console:
+      enabled: false
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+app:
+  cors:
+    # Sin valor por defecto: el entorno debe declarar los orígenes permitidos.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  mock-data:
+    seed-on-startup: false
+  auth:
+    # Sin valores por defecto: los secretos se inyectan por entorno.
+    username: ${APP_AUTH_USERNAME}
+    password: ${APP_AUTH_PASSWORD}
+    role: ${APP_AUTH_ROLE:USER}
+    token-ttl: ${APP_AUTH_TOKEN_TTL:10m}
+
+logging:
+  level:
+    com.pruebasopencode1: ${LOG_LEVEL:INFO}

@@ -1,0 +1,33 @@
+# Backend
+back/target/
+back/data/
+back/*.log
+back/.env
+back/.env.*
+!back/.env.example
+
+# Frontend
+front/node_modules/
+front/dist/
+front/.vite/
+front/.env
+front/.env.*
+!front/.env.example
+
+# Herramientas y editores
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+.factorypath
+.DS_Store
+Thumbs.db
+
+# Sistema
+*.swp
+*.swo
+*.tmp
