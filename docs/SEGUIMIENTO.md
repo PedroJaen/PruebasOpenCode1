@@ -131,13 +131,24 @@
 - [x] Añadir las plantillas `.env.pre.example` y `.env.pro.example` y los scripts `construir.ps1`, `levantar.ps1` y `parar.ps1`.
 - [x] Crear la base Kustomize y los overlays `pre` y `pro`, con namespaces, ConfigMap, PVC, Ingress, TLS, HPA y PDB.
 - [x] Mantener una sola réplica de backend y estrategia `Recreate` por la limitación de H2 en fichero.
-- [x] Crear `scripts/verificar-despliegue.mjs` y el comando `npm run test:deploy` (**40 comprobaciones**).
+- [x] Crear `scripts/verificar-despliegue.mjs` y el comando `npm run test:deploy` (**43 comprobaciones**).
 - [x] Integrar la tabla de despliegue en la documentación viva (`/documentacion`).
 - [x] Construir las cuatro imágenes y probar PRE y PRO con Docker Compose.
 - [x] Verificar en contenedores: SPA, fallback, assets, login, CRUD, `401` sin token, perfiles y TTL.
 - [x] Verificar la persistencia de H2 tras reiniciar el backend.
 - [x] Renderizar ambos overlays con `kubectl kustomize` y validar Compose con `docker compose config`.
 - [x] Actualizar `README.md`, `AGENTS.md`, `DESPLIEGUE.md`, `ARQUITECTURA.md`, `EJECUCION.md`, `PRUEBAS.md`, `OPERACION.md`, `PROMPT.md` y `deploy/README.md`.
+
+### Fase 13. Paridad funcional de PRE y PRO con local
+
+- [x] Activar `SEED_MOCK_DATA=true`, `H2_CONSOLE_ENABLED=true` y `SPRINGDOC_ENABLED=true` por defecto en los perfiles `pre` y `prod`.
+- [x] Añadir `H2_CONSOLE_ALLOW_OTHERS`, con `true` en Compose y Kubernetes para permitir el acceso desde la red interna.
+- [x] Publicar `/h2-console`, `/swagger-ui`, `/v3/api-docs` y `/actuator` a través de Nginx en el mismo origen que la SPA.
+- [x] Actualizar las plantillas `.env.pre.example` y `.env.pro.example` y el ConfigMap base.
+- [x] Ampliar `scripts/verificar-despliegue.mjs` de 40 a **43 comprobaciones**.
+- [x] Reconstruir las cuatro imágenes y verificar en Docker: 10 datos mock, reset, CRUD, `401`, consola H2 y Swagger.
+- [x] Verificar la persistencia de H2 tras reiniciar el backend en ambos entornos.
+- [x] Actualizar la documentación y regenerar la página `/documentacion`.
 
 ## 2. Resultados de verificación (2026-11-09)
 
@@ -150,7 +161,7 @@
 | Interfaz real en navegador | `npm.cmd run test:ui` (en `/front`) | **14/14 comprobaciones**, sin errores de consola |
 | Mutation testing | `back\mvnw.cmd -B test-compile org.pitest:pitest-maven:mutationCoverage` | **BUILD SUCCESS** · 21/21 mutaciones, 100 % de detección y 48/50 (96 %) de cobertura |
 | Documentación viva | `npm run build` + Chrome headless sobre Vite | **Correcta** · secciones, tablas de resultados y consola sin errores |
-| Verificación de despliegue | `node scripts\verificar-despliegue.mjs` | **40/40 comprobaciones** |
+| Verificación de despliegue | `node scripts\verificar-despliegue.mjs` | **43/43 comprobaciones** |
 | Imágenes Docker | `back:pre`, `front:pre`, `back:pro`, `front:pro` | **4/4 construidas** correctamente |
 | Compose PRE | `.\deploy\docker\levantar.ps1 -Entorno pre` | **2/2 contenedores `healthy`** · SPA, API, login, CRUD, `401` y persistencia H2 |
 | Compose PRO | `.\deploy\docker\levantar.ps1 -Entorno pro` | **2/2 contenedores `healthy`** · perfil `prod`, TTL 299 s y CRUD |
@@ -227,10 +238,13 @@ Con Docker 28.0.1 y Compose v2.33.1:
 5. El proxy `/api` funciona: login, listado, creación, eliminación y `401` sin token.
 6. El backend y el frontend quedan `healthy` en ambos entornos.
 7. H2 conserva los datos tras reiniciar el contenedor del backend.
-8. `kubectl kustomize` renderiza PRE y PRO con namespaces, ConfigMap, PVC, Deployments, Services,
-   Ingress, y en PRO también HPA y PDB.
-9. `docker compose config --quiet` valida ambas plantillas de entorno.
-10. La suite `scripts/verificar-despliegue.mjs` supera **40/40 comprobaciones**.
+8. Si la base está vacía se siembran 10 personas mock; el reset restaura exactamente esas 10.
+9. La consola H2 (incluido el login a la base de datos) y Swagger responden por el puerto del
+   frontend y por el backend directo.
+10. `kubectl kustomize` renderiza PRE y PRO con namespaces, ConfigMap, PVC, Deployments, Services,
+    Ingress, y en PRO también HPA y PDB.
+11. `docker compose config --quiet` valida ambas plantillas de entorno.
+12. La suite `scripts/verificar-despliegue.mjs` supera **43/43 comprobaciones**.
 
 No se ejecutó `kubectl apply` porque el entorno no tenía un contexto de Kubernetes configurado.
 
@@ -262,6 +276,9 @@ No se ejecutó `kubectl apply` porque el entorno no tenía un contexto de Kubern
 | 2026-11-09 | Perfiles `dev`/`test`/`pre`/`prod` con secretos externalizados | Evita secretos versionados y permite cambiar de entorno sin tocar código. |
 | 2026-11-09 | Tema oscuro con preferencia `sistema` | Mejora la accesibilidad y respeta la preferencia del sistema, persistida en `localStorage`. |
 | 2026-11-09 | `ErrorBoundary` en React | Evita que un error de renderizado deje la aplicación en blanco. |
+| 2026-11-09 | Paridad funcional de PRE/PRO con local | PRE y PRO siembran los 10 datos mock, permiten reset y exponen consola H2 y Swagger por defecto, para que el comportamiento sea idéntico al local. Se documenta que un entorno real debe desactivar consola/Swagger y sustituir el autologin. |
+| 2026-11-09 | `H2_CONSOLE_ALLOW_OTHERS=true` en Docker/Kubernetes | La consola solo acepta peticiones de `127.0.0.1` por defecto; dentro de un contenedor la petición llega desde la red interna. Se limita al entorno interno y se puede desactivar por variable. |
+| 2026-11-09 | Nginx publica consola, Swagger y Actuator | Permite usar las mismas herramientas que en local desde el mismo origen de la SPA, sin abrir puertos adicionales del backend. |
 | 2026-11-09 | Dos imágenes Docker independientes | Backend y frontend tienen ciclos de vida y escalado distintos; se evita acoplar sus builds. |
 | 2026-11-09 | Nginx sin privilegios sirve la SPA y proxifica `/api` | La interfaz y la API comparten origen; no se necesita CORS para el tráfico del navegador. |
 | 2026-11-09 | Backend sin root (UID 10001) y root FS de solo lectura | Reduce la superficie de ataque; `/app/data` y `/tmp` se montan explícitamente. |
@@ -389,6 +406,9 @@ No hay problemas bloqueantes para el alcance actual. Limitaciones y siguientes p
 8. **Internacionalización:** la interfaz está en español; no se ha implementado multiidioma.
 9. **Mutation testing:** PIT cubre solo el servicio y el mapper; controladores, entidades y
    configuración no se mutan. Todavía no está integrado en un pipeline de CI.
+10. **Consola H2 y Swagger activos por defecto en PRE/PRO:** es una decisión deliberada para igualar
+    el comportamiento local. En un entorno expuesto hay que definir `H2_CONSOLE_ENABLED=false`,
+    `H2_CONSOLE_ALLOW_OTHERS=false` y `SPRINGDOC_ENABLED=false`.
 
 ## 7. Cómo continuar
 

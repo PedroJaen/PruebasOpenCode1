@@ -135,7 +135,8 @@ está en [`docs/SEGUIMIENTO.md`](docs/SEGUIMIENTO.md) y la estrategia de pruebas
 
 ## Docker y Kubernetes (PRE/PRO)
 
-El proyecto incluye imágenes y manifiestos listos para PRE y PRO:
+El proyecto incluye imágenes y manifiestos listos para PRE y PRO. Ambos entornos replican el
+comportamiento local: H2 persistente, 10 datos mock, reset, consola H2, Swagger y CRUD.
 
 ```powershell
 # Construir imágenes de PRE
@@ -160,7 +161,7 @@ kubectl -n pruebasopencode1-pre create secret generic pruebasopencode1-secrets `
 kubectl apply -k deploy/k8s/overlays/pre
 ```
 
-La validación sin clúster se ejecuta con `node scripts\verificar-despliegue.mjs` (**40/40**). La guía
+La validación sin clúster se ejecuta con `node scripts\verificar-despliegue.mjs` (**43/43**). La guía
 completa, las diferencias PRE/PRO y las limitaciones de H2 y de los tokens están en
 [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md) y [`deploy/README.md`](deploy/README.md).
 
@@ -184,7 +185,8 @@ editarse a mano.
 ## Configuración
 
 El backend se configura por variables de entorno con valores por defecto para desarrollo
-(`SERVER_PORT`, `DB_URL`, `CORS_ALLOWED_ORIGINS`, `SEED_MOCK_DATA`, `APP_AUTH_USERNAME`,
+(`SERVER_PORT`, `DB_URL`, `CORS_ALLOWED_ORIGINS`, `SEED_MOCK_DATA`, `H2_CONSOLE_ENABLED`,
+`SPRINGDOC_ENABLED`, `APP_AUTH_USERNAME`,
 `APP_AUTH_PASSWORD`, `APP_AUTH_TOKEN_TTL`, etc.). En `pre` y `prod` los secretos no tienen valor por
 defecto y deben inyectarse desde el entorno. El frontend usa `VITE_API_BASE_URL`,
 `VITE_PROXY_TARGET`, `VITE_AUTH_USERNAME` y `VITE_AUTH_PASSWORD`; hay un ejemplo en

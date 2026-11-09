@@ -24,9 +24,10 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en deploy/docker/.env.<entorno>}
       JPA_DDL_AUTO: ${JPA_DDL_AUTO:-update}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?Define CORS_ALLOWED_ORIGINS en deploy/docker/.env.<entorno>}
-      SEED_MOCK_DATA: "false"
-      H2_CONSOLE_ENABLED: "false"
-      SPRINGDOC_ENABLED: "false"
+      SEED_MOCK_DATA: ${SEED_MOCK_DATA:-true}
+      H2_CONSOLE_ENABLED: ${H2_CONSOLE_ENABLED:-true}
+      H2_CONSOLE_ALLOW_OTHERS: ${H2_CONSOLE_ALLOW_OTHERS:-true}
+      SPRINGDOC_ENABLED: ${SPRINGDOC_ENABLED:-true}
       APP_AUTH_USERNAME: ${APP_AUTH_USERNAME:?Define APP_AUTH_USERNAME en deploy/docker/.env.<entorno>}
       APP_AUTH_PASSWORD: ${APP_AUTH_PASSWORD:?Define APP_AUTH_PASSWORD en deploy/docker/.env.<entorno>}
       APP_AUTH_ROLE: ${APP_AUTH_ROLE:-USER}

@@ -103,6 +103,17 @@ anotar(
   'Falta fallback SPA, proxy /api, /healthz o listen 8080.',
 )
 anotar(
+  'Nginx: consola H2, Swagger y Actuator accesibles',
+  'nginx.conf',
+  nginx.includes('location = /h2-console') &&
+    nginx.includes('location /h2-console/') &&
+    nginx.includes('location /swagger-ui/') &&
+    nginx.includes('location /v3/api-docs') &&
+    nginx.includes('location /actuator/') &&
+    nginx.includes('proxy_set_header Host $http_host'),
+  'Faltan los proxies de consola H2, Swagger o Actuator, o el Host con puerto.',
+)
+anotar(
   '.dockerignore excluye secretos y artefactos',
   '.dockerignore',
   dockerignore.includes('**/.env') &&
@@ -114,6 +125,19 @@ anotar(
 )
 
 // 3. Docker Compose PRE y PRO con los ficheros de ejemplo.
+const compose = existe('deploy/docker/docker-compose.yml')
+  ? leer('deploy/docker/docker-compose.yml')
+  : ''
+anotar(
+  'Compose: datos mock y herramientas como en local',
+  'docker-compose.yml',
+  compose.includes('SEED_MOCK_DATA:-true') &&
+    compose.includes('H2_CONSOLE_ENABLED:-true') &&
+    compose.includes('H2_CONSOLE_ALLOW_OTHERS:-true') &&
+    compose.includes('SPRINGDOC_ENABLED:-true'),
+  'Compose debe activar datos mock, consola H2 y Swagger por defecto.',
+)
+
 for (const entorno of ['pre', 'pro']) {
   const resultado = ejecutar('docker', [
     'compose',
@@ -174,6 +198,22 @@ function renderizar(entorno, perfiles) {
 
 const pre = renderizar('pre', 'pre')
 const pro = renderizar('pro', 'prod')
+
+anotar(
+  'PRE y PRO: datos mock, consola H2 y Swagger activos',
+  'kubectl kustomize',
+  Boolean(
+    pre &&
+      pro &&
+      pre.includes('SEED_MOCK_DATA: "true"') &&
+      pre.includes('H2_CONSOLE_ENABLED: "true"') &&
+      pre.includes('SPRINGDOC_ENABLED: "true"') &&
+      pro.includes('SEED_MOCK_DATA: "true"') &&
+      pro.includes('H2_CONSOLE_ENABLED: "true"') &&
+      pro.includes('SPRINGDOC_ENABLED: "true"'),
+  ),
+  'Los ConfigMap de PRE y PRO deben activar datos mock, consola H2 y Swagger.',
+)
 
 if (pro) {
   anotar(

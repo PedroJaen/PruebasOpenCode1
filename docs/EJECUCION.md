@@ -50,8 +50,8 @@ El backend usa `dev` cuando no se indica perfil. Los perfiles disponibles son:
 | --- | --- | --- | --- | --- | --- |
 | `dev` | Desarrollo local (por defecto). | H2 en fichero. | Sí | Sí | `15m` |
 | `test` | Pruebas automatizadas. | H2 en memoria, `create-drop`. | No | Sí | `15m` |
-| `pre` | Preproducción simulada. | H2 en `./data/pre`, configurable. | No | No | `10m` |
-| `prod` | Producción simulada. | H2 en `./data/prod`, configurable. | No | No | `5m` |
+| `pre` | Preproducción simulada. | H2 en `./data/pre`, configurable. | Sí | Sí | `10m` |
+| `prod` | Producción simulada. | H2 en `./data/prod`, configurable. | Sí | Sí | `5m` |
 
 Se selecciona con `SPRING_PROFILES_ACTIVE`:
 
@@ -85,9 +85,11 @@ El backend queda disponible en:
 
 - API: `http://localhost:8080/api/v1/personas`
 - Salud: `http://localhost:8080/actuator/health`
-- Consola H2: `http://localhost:8080/h2-console` (solo `dev`)
-- Swagger UI: `http://localhost:8080/swagger-ui/index.html` (no en `pre`/`prod`)
-- OpenAPI JSON: `http://localhost:8080/v3/api-docs` (no en `pre`/`prod`)
+- Consola H2: `http://localhost:8080/h2-console` (`dev`, `pre` y `prod`; desactivable con
+  `H2_CONSOLE_ENABLED=false`)
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html` (`dev`, `pre` y `prod`; desactivable con
+  `SPRINGDOC_ENABLED=false`)
+- OpenAPI JSON: `http://localhost:8080/v3/api-docs` (misma condición que Swagger UI)
 
 Swagger UI permite consultar y probar todos los endpoints desde el navegador (**Authorize** con el
 token y **Try it out**). No requiere ninguna herramienta adicional: se genera automáticamente a
@@ -345,7 +347,7 @@ node scripts\verificar-despliegue.mjs
 ```
 
 Valida los Dockerfiles, Nginx, Docker Compose PRE/PRO y los overlays Kustomize. No necesita el motor
-de Docker arrancado ni un clúster. El resultado esperado es **40/40 comprobaciones** y el informe
+de Docker arrancado ni un clúster. El resultado esperado es **43/43 comprobaciones** y el informe
 `deploy/verificacion-despliegue.json`.
 
 ## 5. Variables de entorno
@@ -361,14 +363,15 @@ de Docker arrancado ni un clúster. El resultado esperado es **40/40 comprobacio
 | `DB_PASSWORD` | *(vacía)* (`dev`/`test`) | Contraseña de la base de datos. Obligatoria en `pre`/`prod`. |
 | `JPA_DDL_AUTO` | `update` | Estrategia de creación del esquema. |
 | `JPA_SHOW_SQL` | `false` | Muestra SQL en los logs. |
-| `H2_CONSOLE_ENABLED` | `true` (`dev`) | Activa la consola H2. |
+| `H2_CONSOLE_ENABLED` | `true` (`dev`/`pre`/`prod`) | Activa la consola H2. |
+| `H2_CONSOLE_ALLOW_OTHERS` | `false` | Permite la consola H2 desde otra IP. En Docker/Kubernetes se define `true`. |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` (`dev`/`test`) | Orígenes permitidos. Obligatorio en `pre`/`prod`. |
-| `SEED_MOCK_DATA` | `true` (`dev`), `false` (`pre`/`prod`) | Siembra inicial si la base de datos está vacía. |
+| `SEED_MOCK_DATA` | `true` (`dev`/`pre`/`prod`) | Siembra inicial si la base de datos está vacía. |
 | `APP_AUTH_USERNAME` | `demo` (`dev`/`test`) | Usuario del autologin. Obligatorio en `pre`/`prod`. |
 | `APP_AUTH_PASSWORD` | `demo1234` (`dev`/`test`) | Contraseña usada para generar el hash BCrypt. Obligatoria en `pre`/`prod`. |
 | `APP_AUTH_ROLE` | `USER` | Rol asignado al usuario. |
 | `APP_AUTH_TOKEN_TTL` | `15m` (`dev`/`test`), `10m` (`pre`), `5m` (`prod`) | Vigencia del token Bearer. |
-| `SPRINGDOC_ENABLED` | `true` (`dev`/`test`), `false` (`pre`/`prod`) | Activa Swagger UI y `/v3/api-docs`. |
+| `SPRINGDOC_ENABLED` | `true` (`dev`/`test`/`pre`/`prod`) | Activa Swagger UI y `/v3/api-docs`. |
 | `LOG_LEVEL` | `INFO` (`dev`), `WARN` (`pre`/`prod`) | Nivel de log del paquete de la aplicación. |
 
 Ejemplo:
@@ -456,7 +459,7 @@ frontend hace ese login de forma transparente al entrar en `/personas`.
 | La sesión caduca continuamente | Revisar `APP_AUTH_TOKEN_TTL`; el frontend renueva 60 s antes de la caducidad. |
 | Error de CORS | Añadir el origen del frontend a `CORS_ALLOWED_ORIGINS`. |
 | `Database may be already in use` (H2) | Solo un proceso puede usar el fichero H2; cerrar la otra instancia. |
-| La consola H2 no carga | Verificar `H2_CONSOLE_ENABLED=true` y el perfil `dev`; en `pre`/`prod` está desactivada. |
+| La consola H2 no carga | Verificar `H2_CONSOLE_ENABLED=true`. En Docker/Kubernetes añadir `H2_CONSOLE_ALLOW_OTHERS=true`, porque la petición no llega desde `127.0.0.1`. |
 | `npm.ps1 cannot be loaded` | Usar `npm.cmd` o ajustar la política de ejecución de PowerShell. |
 | La prueba UI no encuentra el navegador | Definir `CHROME_PATH` con la ruta de Chrome o Edge. |
 | Las suites E2E/UI fallan con `409` o `500` | No ejecutarlas en paralelo: ambas hacen reset. Ejecutar integración y después UI. |

@@ -453,7 +453,7 @@ prueba y marca las comprobaciones con el último resultado registrado.
 - **Documentación**: la página `/documentacion` se regenera con `npm run docs` y se valida con el
   build de tipos. Una verificación funcional comprueba sus secciones, pestañas, tablas y consola.
 - **Despliegue**: `scripts/verificar-despliegue.mjs` valida Dockerfiles, Nginx, Compose PRE/PRO y los
-  overlays Kustomize (**40 comprobaciones**, sin clúster).
+  overlays Kustomize (**43 comprobaciones**, sin clúster).
 
 La estrategia detallada está en [`PRUEBAS.md`](PRUEBAS.md) y los resultados se registran en
 [`SEGUIMIENTO.md`](SEGUIMIENTO.md).
@@ -469,6 +469,8 @@ La aplicación se puede ejecutar en Docker y Kubernetes sin cambiar el código:
   ConfigMap, Ingress, TLS y recursos de escalado.
 - **Configuración**: el perfil, la base de datos, CORS y los secretos se inyectan por entorno; la
   imagen del backend es la misma en PRE y PRO.
+- **Paridad con local**: PRE y PRO siembran los 10 datos mock, permiten reset y exponen consola H2 y
+  Swagger; Nginx publica también `/h2-console`, `/swagger-ui`, `/v3/api-docs` y `/actuator`.
 - **Salud**: Actuator expone `liveness` y `readiness`; Nginx expone `/healthz`.
 - **Persistencia**: H2 sobre un PVC, una sola réplica de backend y estrategia `Recreate`.
 

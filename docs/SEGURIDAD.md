@@ -294,7 +294,9 @@ Se aceptan porque el objetivo es una demo local con autologin transparente.
 
 ### Otros límites
 
-- La consola H2 y Swagger están abiertos en local; deben desactivarse fuera de desarrollo.
+- Por defecto, la consola H2 y Swagger están activos también en PRE/PRO para igualar el
+  comportamiento local. En un entorno expuesto deben desactivarse y limitar la consola a la red
+  interna.
 - No hay bloqueo por intentos fallidos, rotación de contraseña ni auditoría de accesos.
 - No se usan HTTPS ni certificados por defecto en local.
 - La auditoría cubre personas, no inicios de sesión ni cambios de configuración.
@@ -304,7 +306,8 @@ Se aceptan porque el objetivo es una demo local con autologin transparente.
 1. Sustituir las credenciales fijas por un proveedor de identidad o login individual.
 2. Servir todo por HTTPS.
 3. Mantener CSRF desactivado mientras no haya cookies de autenticación; activarlo si se reintroducen.
-4. Desactivar H2 Console y Swagger en PRE/PRO (ya ocurre en los perfiles `pre` y `prod`).
+4. Desactivar H2 Console y Swagger en un PRE/PRO expuesto: definir `H2_CONSOLE_ENABLED=false`,
+   `H2_CONSOLE_ALLOW_OTHERS=false` y `SPRINGDOC_ENABLED=false`.
 5. Añadir limitación de intentos, auditoría de accesos y políticas de contraseña.
 6. Externalizar los secretos en un gestor de secretos, nunca en el repositorio.
 7. Para varias réplicas, compartir tokens en Redis o adoptar JWT firmados con rotación de claves.

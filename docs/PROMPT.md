@@ -222,13 +222,14 @@ permitir cambiar de entorno mediante variables sin tocar código:
 - `DB_USERNAME` y `DB_PASSWORD`.
 - `JPA_DDL_AUTO` (por defecto `update`).
 - `JPA_SHOW_SQL` (por defecto `false`).
-- `H2_CONSOLE_ENABLED` (por defecto `true` en `dev`, `false` en `pre`/`prod`).
+- `H2_CONSOLE_ENABLED` (por defecto `true` en `dev`, `pre` y `prod`).
+- `H2_CONSOLE_ALLOW_OTHERS` (por defecto `false`; Docker/Kubernetes lo ponen a `true`).
 - `CORS_ALLOWED_ORIGINS` (por defecto `http://localhost:5173,http://127.0.0.1:5173` en `dev`).
-- `SEED_MOCK_DATA` (por defecto `true` en `dev`, `false` en `pre`/`prod`).
+- `SEED_MOCK_DATA` (por defecto `true` en `dev`, `pre` y `prod`).
 - `APP_AUTH_USERNAME` (por defecto `demo` en `dev`), `APP_AUTH_PASSWORD` (por defecto `demo1234` en
   `dev`), `APP_AUTH_ROLE` (por defecto `USER`) y `APP_AUTH_TOKEN_TTL` (`15m` en `dev`/`test`, `10m`
   en `pre`, `5m` en `prod`).
-- `SPRINGDOC_ENABLED` (`true` en `dev`/`test`, `false` en `pre`/`prod`).
+- `SPRINGDOC_ENABLED` (`true` en `dev`/`test`/`pre`/`prod`).
 - `LOG_LEVEL`.
 
 En `pre` y `prod` no debe haber valores por defecto para secretos ni para CORS: deben inyectarse
@@ -447,10 +448,12 @@ Implementa Docker y Kubernetes para PRE y PRO:
 - `deploy/docker/front.Dockerfile`: multi-stage con Node y Vite, y runtime
   `nginxinc/nginx-unprivileged` en el puerto 8080.
 - `deploy/docker/nginx.conf`: fallback de SPA, proxy `/api/` a `http://back:8080`, `/healthz`,
-  cabeceras de seguridad y caché de assets con hash.
+  proxies de `/h2-console`, `/swagger-ui`, `/v3/api-docs` y `/actuator`, cabeceras de seguridad y
+  caché de assets con hash.
 - `deploy/docker/docker-compose.yml` parametrizado por `deploy/docker/.env.<entorno>`:
   - PRE: frontend `8088`, API directa `8081`, perfil `pre`, TTL `10m`.
   - PRO: frontend `8098`, API directa `8091`, perfil `prod`, TTL `5m`.
+  - Mismo comportamiento que local: `SEED_MOCK_DATA=true`, consola H2, Swagger y reset disponibles.
   - Cada entorno usa su propio proyecto, red y volumen H2.
 - `deploy/k8s/base`: ConfigMap, PVC, Deployments, Services e Ingress comunes.
 - `deploy/k8s/overlays/pre`: namespace `pruebasopencode1-pre`, perfil `pre`, host y TLS de PRE.
@@ -460,7 +463,7 @@ Implementa Docker y Kubernetes para PRE y PRO:
   `liveness`/`readiness` y `drop: ALL`.
 - Secretos fuera de las kustomizations; se crean con `kubectl create secret`.
 - `scripts/verificar-despliegue.mjs`: valida Dockerfiles, Nginx, `.dockerignore`, Compose y Kustomize
-  sin necesitar un clúster. Debe superar **40/40 comprobaciones** y generar
+  sin necesitar un clúster. Debe superar **43/43 comprobaciones** y generar
   `deploy/verificacion-despliegue.json` para la página `/documentacion`.
 - `front/package.json` expone `npm run test:deploy`.
 
@@ -521,7 +524,7 @@ No consideres la tarea terminada hasta comprobar que:
 - `node scripts\verificar-integracion.mjs` supera las 18 comprobaciones, incluido el `401` sin token,
   el autologin, la auditoría y la revocación tras el logout.
 - `front\npm run test:ui` supera las 14 comprobaciones sin errores de consola.
-- La verificación de despliegue supera las **40 comprobaciones** (`node scripts\verificar-despliegue.mjs`).
+- La verificación de despliegue supera las **43 comprobaciones** (`node scripts\verificar-despliegue.mjs`).
 - Docker Compose arranca PRE y PRO con contenedores `healthy`, login, CRUD y persistencia H2.
 - Kustomize renderiza ambos overlays con su namespace, perfil e imágenes, sin secretos versionados.
 - La API de personas devuelve `401` sin token; el autologin obtiene un token real y la contraseña

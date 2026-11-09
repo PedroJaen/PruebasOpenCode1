@@ -471,8 +471,9 @@ en `PersonaController` y en los DTO se reflejan automáticamente. El título, la
 esquema `bearerAuth` se definen en `OpenApiConfig`; las rutas y el orden de operaciones se configuran
 en `application.yml` bajo la clave `springdoc`.
 
-> En los perfiles `pre` y `prod` Swagger y `/v3/api-docs` están desactivados. En local permanecen
-> activos para facilitar las pruebas. También se puede usar `SPRINGDOC_ENABLED=false`.
+> Swagger y `/v3/api-docs` están activos por defecto en `dev`, `pre` y `prod` para igualar el
+> comportamiento local. Se pueden desactivar con `SPRINGDOC_ENABLED=false` antes de exponer un entorno
+> real. En Docker/Kubernetes también se puede acceder por el puerto del frontend, que actúa como proxy.
 
 ## 10. Documentación relacionada
 

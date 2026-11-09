@@ -469,13 +469,14 @@ permitir cambiar de entorno mediante variables sin tocar código:
 - \`DB_USERNAME\` y \`DB_PASSWORD\`.
 - \`JPA_DDL_AUTO\` (por defecto \`update\`).
 - \`JPA_SHOW_SQL\` (por defecto \`false\`).
-- \`H2_CONSOLE_ENABLED\` (por defecto \`true\` en \`dev\`, \`false\` en \`pre\`/\`prod\`).
+- \`H2_CONSOLE_ENABLED\` (por defecto \`true\` en \`dev\`, \`pre\` y \`prod\`).
+- \`H2_CONSOLE_ALLOW_OTHERS\` (por defecto \`false\`; Docker/Kubernetes lo ponen a \`true\`).
 - \`CORS_ALLOWED_ORIGINS\` (por defecto \`http://localhost:5173,http://127.0.0.1:5173\` en \`dev\`).
-- \`SEED_MOCK_DATA\` (por defecto \`true\` en \`dev\`, \`false\` en \`pre\`/\`prod\`).
+- \`SEED_MOCK_DATA\` (por defecto \`true\` en \`dev\`, \`pre\` y \`prod\`).
 - \`APP_AUTH_USERNAME\` (por defecto \`demo\` en \`dev\`), \`APP_AUTH_PASSWORD\` (por defecto \`demo1234\` en
   \`dev\`), \`APP_AUTH_ROLE\` (por defecto \`USER\`) y \`APP_AUTH_TOKEN_TTL\` (\`15m\` en \`dev\`/\`test\`, \`10m\`
   en \`pre\`, \`5m\` en \`prod\`).
-- \`SPRINGDOC_ENABLED\` (\`true\` en \`dev\`/\`test\`, \`false\` en \`pre\`/\`prod\`).
+- \`SPRINGDOC_ENABLED\` (\`true\` en \`dev\`/\`test\`/\`pre\`/\`prod\`).
 - \`LOG_LEVEL\`.
 
 En \`pre\` y \`prod\` no debe haber valores por defecto para secretos ni para CORS: deben inyectarse
@@ -694,10 +695,12 @@ Implementa Docker y Kubernetes para PRE y PRO:
 - \`deploy/docker/front.Dockerfile\`: multi-stage con Node y Vite, y runtime
   \`nginxinc/nginx-unprivileged\` en el puerto 8080.
 - \`deploy/docker/nginx.conf\`: fallback de SPA, proxy \`/api/\` a \`http://back:8080\`, \`/healthz\`,
-  cabeceras de seguridad y caché de assets con hash.
+  proxies de \`/h2-console\`, \`/swagger-ui\`, \`/v3/api-docs\` y \`/actuator\`, cabeceras de seguridad y
+  caché de assets con hash.
 - \`deploy/docker/docker-compose.yml\` parametrizado por \`deploy/docker/.env.<entorno>\`:
   - PRE: frontend \`8088\`, API directa \`8081\`, perfil \`pre\`, TTL \`10m\`.
   - PRO: frontend \`8098\`, API directa \`8091\`, perfil \`prod\`, TTL \`5m\`.
+  - Mismo comportamiento que local: \`SEED_MOCK_DATA=true\`, consola H2, Swagger y reset disponibles.
   - Cada entorno usa su propio proyecto, red y volumen H2.
 - \`deploy/k8s/base\`: ConfigMap, PVC, Deployments, Services e Ingress comunes.
 - \`deploy/k8s/overlays/pre\`: namespace \`pruebasopencode1-pre\`, perfil \`pre\`, host y TLS de PRE.
@@ -707,7 +710,7 @@ Implementa Docker y Kubernetes para PRE y PRO:
   \`liveness\`/\`readiness\` y \`drop: ALL\`.
 - Secretos fuera de las kustomizations; se crean con \`kubectl create secret\`.
 - \`scripts/verificar-despliegue.mjs\`: valida Dockerfiles, Nginx, \`.dockerignore\`, Compose y Kustomize
-  sin necesitar un clúster. Debe superar **40/40 comprobaciones** y generar
+  sin necesitar un clúster. Debe superar **43/43 comprobaciones** y generar
   \`deploy/verificacion-despliegue.json\` para la página \`/documentacion\`.
 - \`front/package.json\` expone \`npm run test:deploy\`.
 
@@ -768,7 +771,7 @@ No consideres la tarea terminada hasta comprobar que:
 - \`node scripts\\verificar-integracion.mjs\` supera las 18 comprobaciones, incluido el \`401\` sin token,
   el autologin, la auditoría y la revocación tras el logout.
 - \`front\\npm run test:ui\` supera las 14 comprobaciones sin errores de consola.
-- La verificación de despliegue supera las **40 comprobaciones** (\`node scripts\\verificar-despliegue.mjs\`).
+- La verificación de despliegue supera las **43 comprobaciones** (\`node scripts\\verificar-despliegue.mjs\`).
 - Docker Compose arranca PRE y PRO con contenedores \`healthy\`, login, CRUD y persistencia H2.
 - Kustomize renderiza ambos overlays con su namespace, perfil e imágenes, sin secretos versionados.
 - La API de personas devuelve \`401\` sin token; el autologin obtiene un token real y la contraseña
@@ -930,7 +933,8 @@ está en [\`docs/SEGUIMIENTO.md\`](docs/SEGUIMIENTO.md) y la estrategia de prueb
 
 ## Docker y Kubernetes (PRE/PRO)
 
-El proyecto incluye imágenes y manifiestos listos para PRE y PRO:
+El proyecto incluye imágenes y manifiestos listos para PRE y PRO. Ambos entornos replican el
+comportamiento local: H2 persistente, 10 datos mock, reset, consola H2, Swagger y CRUD.
 
 \`\`\`powershell
 # Construir imágenes de PRE
@@ -955,7 +959,7 @@ kubectl -n pruebasopencode1-pre create secret generic pruebasopencode1-secrets \
 kubectl apply -k deploy/k8s/overlays/pre
 \`\`\`
 
-La validación sin clúster se ejecuta con \`node scripts\\verificar-despliegue.mjs\` (**40/40**). La guía
+La validación sin clúster se ejecuta con \`node scripts\\verificar-despliegue.mjs\` (**43/43**). La guía
 completa, las diferencias PRE/PRO y las limitaciones de H2 y de los tokens están en
 [\`docs/DESPLIEGUE.md\`](docs/DESPLIEGUE.md) y [\`deploy/README.md\`](deploy/README.md).
 
@@ -979,7 +983,8 @@ editarse a mano.
 ## Configuración
 
 El backend se configura por variables de entorno con valores por defecto para desarrollo
-(\`SERVER_PORT\`, \`DB_URL\`, \`CORS_ALLOWED_ORIGINS\`, \`SEED_MOCK_DATA\`, \`APP_AUTH_USERNAME\`,
+(\`SERVER_PORT\`, \`DB_URL\`, \`CORS_ALLOWED_ORIGINS\`, \`SEED_MOCK_DATA\`, \`H2_CONSOLE_ENABLED\`,
+\`SPRINGDOC_ENABLED\`, \`APP_AUTH_USERNAME\`,
 \`APP_AUTH_PASSWORD\`, \`APP_AUTH_TOKEN_TTL\`, etc.). En \`pre\` y \`prod\` los secretos no tienen valor por
 defecto y deben inyectarse desde el entorno. El frontend usa \`VITE_API_BASE_URL\`,
 \`VITE_PROXY_TARGET\`, \`VITE_AUTH_USERNAME\` y \`VITE_AUTH_PASSWORD\`; hay un ejemplo en
@@ -1462,7 +1467,7 @@ prueba y marca las comprobaciones con el último resultado registrado.
 - **Documentación**: la página \`/documentacion\` se regenera con \`npm run docs\` y se valida con el
   build de tipos. Una verificación funcional comprueba sus secciones, pestañas, tablas y consola.
 - **Despliegue**: \`scripts/verificar-despliegue.mjs\` valida Dockerfiles, Nginx, Compose PRE/PRO y los
-  overlays Kustomize (**40 comprobaciones**, sin clúster).
+  overlays Kustomize (**43 comprobaciones**, sin clúster).
 
 La estrategia detallada está en [\`PRUEBAS.md\`](PRUEBAS.md) y los resultados se registran en
 [\`SEGUIMIENTO.md\`](SEGUIMIENTO.md).
@@ -1478,6 +1483,8 @@ La aplicación se puede ejecutar en Docker y Kubernetes sin cambiar el código:
   ConfigMap, Ingress, TLS y recursos de escalado.
 - **Configuración**: el perfil, la base de datos, CORS y los secretos se inyectan por entorno; la
   imagen del backend es la misma en PRE y PRO.
+- **Paridad con local**: PRE y PRO siembran los 10 datos mock, permiten reset y exponen consola H2 y
+  Swagger; Nginx publica también \`/h2-console\`, \`/swagger-ui\`, \`/v3/api-docs\` y \`/actuator\`.
 - **Salud**: Actuator expone \`liveness\` y \`readiness\`; Nginx expone \`/healthz\`.
 - **Persistencia**: H2 sobre un PVC, una sola réplica de backend y estrategia \`Recreate\`.
 
@@ -1786,7 +1793,9 @@ Se aceptan porque el objetivo es una demo local con autologin transparente.
 
 ### Otros límites
 
-- La consola H2 y Swagger están abiertos en local; deben desactivarse fuera de desarrollo.
+- Por defecto, la consola H2 y Swagger están activos también en PRE/PRO para igualar el
+  comportamiento local. En un entorno expuesto deben desactivarse y limitar la consola a la red
+  interna.
 - No hay bloqueo por intentos fallidos, rotación de contraseña ni auditoría de accesos.
 - No se usan HTTPS ni certificados por defecto en local.
 - La auditoría cubre personas, no inicios de sesión ni cambios de configuración.
@@ -1796,7 +1805,8 @@ Se aceptan porque el objetivo es una demo local con autologin transparente.
 1. Sustituir las credenciales fijas por un proveedor de identidad o login individual.
 2. Servir todo por HTTPS.
 3. Mantener CSRF desactivado mientras no haya cookies de autenticación; activarlo si se reintroducen.
-4. Desactivar H2 Console y Swagger en PRE/PRO (ya ocurre en los perfiles \`pre\` y \`prod\`).
+4. Desactivar H2 Console y Swagger en un PRE/PRO expuesto: definir \`H2_CONSOLE_ENABLED=false\`,
+   \`H2_CONSOLE_ALLOW_OTHERS=false\` y \`SPRINGDOC_ENABLED=false\`.
 5. Añadir limitación de intentos, auditoría de accesos y políticas de contraseña.
 6. Externalizar los secretos en un gestor de secretos, nunca en el repositorio.
 7. Para varias réplicas, compartir tokens en Redis o adoptar JWT firmados con rotación de claves.
@@ -2302,8 +2312,9 @@ en \`PersonaController\` y en los DTO se reflejan automáticamente. El título, 
 esquema \`bearerAuth\` se definen en \`OpenApiConfig\`; las rutas y el orden de operaciones se configuran
 en \`application.yml\` bajo la clave \`springdoc\`.
 
-> En los perfiles \`pre\` y \`prod\` Swagger y \`/v3/api-docs\` están desactivados. En local permanecen
-> activos para facilitar las pruebas. También se puede usar \`SPRINGDOC_ENABLED=false\`.
+> Swagger y \`/v3/api-docs\` están activos por defecto en \`dev\`, \`pre\` y \`prod\` para igualar el
+> comportamiento local. Se pueden desactivar con \`SPRINGDOC_ENABLED=false\` antes de exponer un entorno
+> real. En Docker/Kubernetes también se puede acceder por el puerto del frontend, que actúa como proxy.
 
 ## 10. Documentación relacionada
 
@@ -2371,8 +2382,8 @@ El backend usa \`dev\` cuando no se indica perfil. Los perfiles disponibles son:
 | --- | --- | --- | --- | --- | --- |
 | \`dev\` | Desarrollo local (por defecto). | H2 en fichero. | Sí | Sí | \`15m\` |
 | \`test\` | Pruebas automatizadas. | H2 en memoria, \`create-drop\`. | No | Sí | \`15m\` |
-| \`pre\` | Preproducción simulada. | H2 en \`./data/pre\`, configurable. | No | No | \`10m\` |
-| \`prod\` | Producción simulada. | H2 en \`./data/prod\`, configurable. | No | No | \`5m\` |
+| \`pre\` | Preproducción simulada. | H2 en \`./data/pre\`, configurable. | Sí | Sí | \`10m\` |
+| \`prod\` | Producción simulada. | H2 en \`./data/prod\`, configurable. | Sí | Sí | \`5m\` |
 
 Se selecciona con \`SPRING_PROFILES_ACTIVE\`:
 
@@ -2406,9 +2417,11 @@ El backend queda disponible en:
 
 - API: \`http://localhost:8080/api/v1/personas\`
 - Salud: \`http://localhost:8080/actuator/health\`
-- Consola H2: \`http://localhost:8080/h2-console\` (solo \`dev\`)
-- Swagger UI: \`http://localhost:8080/swagger-ui/index.html\` (no en \`pre\`/\`prod\`)
-- OpenAPI JSON: \`http://localhost:8080/v3/api-docs\` (no en \`pre\`/\`prod\`)
+- Consola H2: \`http://localhost:8080/h2-console\` (\`dev\`, \`pre\` y \`prod\`; desactivable con
+  \`H2_CONSOLE_ENABLED=false\`)
+- Swagger UI: \`http://localhost:8080/swagger-ui/index.html\` (\`dev\`, \`pre\` y \`prod\`; desactivable con
+  \`SPRINGDOC_ENABLED=false\`)
+- OpenAPI JSON: \`http://localhost:8080/v3/api-docs\` (misma condición que Swagger UI)
 
 Swagger UI permite consultar y probar todos los endpoints desde el navegador (**Authorize** con el
 token y **Try it out**). No requiere ninguna herramienta adicional: se genera automáticamente a
@@ -2666,7 +2679,7 @@ node scripts\\verificar-despliegue.mjs
 \`\`\`
 
 Valida los Dockerfiles, Nginx, Docker Compose PRE/PRO y los overlays Kustomize. No necesita el motor
-de Docker arrancado ni un clúster. El resultado esperado es **40/40 comprobaciones** y el informe
+de Docker arrancado ni un clúster. El resultado esperado es **43/43 comprobaciones** y el informe
 \`deploy/verificacion-despliegue.json\`.
 
 ## 5. Variables de entorno
@@ -2682,14 +2695,15 @@ de Docker arrancado ni un clúster. El resultado esperado es **40/40 comprobacio
 | \`DB_PASSWORD\` | *(vacía)* (\`dev\`/\`test\`) | Contraseña de la base de datos. Obligatoria en \`pre\`/\`prod\`. |
 | \`JPA_DDL_AUTO\` | \`update\` | Estrategia de creación del esquema. |
 | \`JPA_SHOW_SQL\` | \`false\` | Muestra SQL en los logs. |
-| \`H2_CONSOLE_ENABLED\` | \`true\` (\`dev\`) | Activa la consola H2. |
+| \`H2_CONSOLE_ENABLED\` | \`true\` (\`dev\`/\`pre\`/\`prod\`) | Activa la consola H2. |
+| \`H2_CONSOLE_ALLOW_OTHERS\` | \`false\` | Permite la consola H2 desde otra IP. En Docker/Kubernetes se define \`true\`. |
 | \`CORS_ALLOWED_ORIGINS\` | \`http://localhost:5173,http://127.0.0.1:5173\` (\`dev\`/\`test\`) | Orígenes permitidos. Obligatorio en \`pre\`/\`prod\`. |
-| \`SEED_MOCK_DATA\` | \`true\` (\`dev\`), \`false\` (\`pre\`/\`prod\`) | Siembra inicial si la base de datos está vacía. |
+| \`SEED_MOCK_DATA\` | \`true\` (\`dev\`/\`pre\`/\`prod\`) | Siembra inicial si la base de datos está vacía. |
 | \`APP_AUTH_USERNAME\` | \`demo\` (\`dev\`/\`test\`) | Usuario del autologin. Obligatorio en \`pre\`/\`prod\`. |
 | \`APP_AUTH_PASSWORD\` | \`demo1234\` (\`dev\`/\`test\`) | Contraseña usada para generar el hash BCrypt. Obligatoria en \`pre\`/\`prod\`. |
 | \`APP_AUTH_ROLE\` | \`USER\` | Rol asignado al usuario. |
 | \`APP_AUTH_TOKEN_TTL\` | \`15m\` (\`dev\`/\`test\`), \`10m\` (\`pre\`), \`5m\` (\`prod\`) | Vigencia del token Bearer. |
-| \`SPRINGDOC_ENABLED\` | \`true\` (\`dev\`/\`test\`), \`false\` (\`pre\`/\`prod\`) | Activa Swagger UI y \`/v3/api-docs\`. |
+| \`SPRINGDOC_ENABLED\` | \`true\` (\`dev\`/\`test\`/\`pre\`/\`prod\`) | Activa Swagger UI y \`/v3/api-docs\`. |
 | \`LOG_LEVEL\` | \`INFO\` (\`dev\`), \`WARN\` (\`pre\`/\`prod\`) | Nivel de log del paquete de la aplicación. |
 
 Ejemplo:
@@ -2777,7 +2791,7 @@ frontend hace ese login de forma transparente al entrar en \`/personas\`.
 | La sesión caduca continuamente | Revisar \`APP_AUTH_TOKEN_TTL\`; el frontend renueva 60 s antes de la caducidad. |
 | Error de CORS | Añadir el origen del frontend a \`CORS_ALLOWED_ORIGINS\`. |
 | \`Database may be already in use\` (H2) | Solo un proceso puede usar el fichero H2; cerrar la otra instancia. |
-| La consola H2 no carga | Verificar \`H2_CONSOLE_ENABLED=true\` y el perfil \`dev\`; en \`pre\`/\`prod\` está desactivada. |
+| La consola H2 no carga | Verificar \`H2_CONSOLE_ENABLED=true\`. En Docker/Kubernetes añadir \`H2_CONSOLE_ALLOW_OTHERS=true\`, porque la petición no llega desde \`127.0.0.1\`. |
 | \`npm.ps1 cannot be loaded\` | Usar \`npm.cmd\` o ajustar la política de ejecución de PowerShell. |
 | La prueba UI no encuentra el navegador | Definir \`CHROME_PATH\` con la ruta de Chrome o Edge. |
 | Las suites E2E/UI fallan con \`409\` o \`500\` | No ejecutarlas en paralelo: ambas hacen reset. Ejecutar integración y después UI. |
@@ -2822,7 +2836,7 @@ a las pruebas de carga o seguridad de un entorno real.
 | Integración de extremo a extremo | Node.js + \`fetch\` a través del proxy de Vite | 18 comprobaciones | Flujo real frontend → proxy → autologin → API → H2 → auditoría. |
 | Interfaz con navegador | Playwright Core + Chrome/Edge del sistema | 14 comprobaciones | Pantallas, autologin transparente, formularios, confirmaciones, notificaciones, tema oscuro y consola del navegador. |
 | Mutación de backend | PIT 1.30.2 + JUnit 5 | 21 mutaciones | Servicio y mapper: CRUD, cálculo de edad, limpieza de datos y actualización. |
-| Despliegue | Docker, Docker Compose y Kustomize | 40 comprobaciones | Dockerfiles, Nginx, Compose PRE/PRO y overlays Kubernetes, sin clúster. |
+| Despliegue | Docker, Docker Compose y Kustomize | 43 comprobaciones | Dockerfiles, Nginx, Compose PRE/PRO y overlays Kubernetes, sin clúster. |
 | Migración de esquema | Verificación manual con H2 antigua | — | Retirada de la columna heredada \`edad\` y funcionamiento posterior del CRUD. |
 
 Total de pruebas de backend en \`clean verify\`: **34** (11 unitarias + 14 de integración de personas +
@@ -3111,8 +3125,8 @@ Resultados de la última verificación funcional (2026-11-09):
 | \`verificar-integracion.mjs\` | **18/18 comprobaciones** |
 | \`verificar-ui.mjs\` | **14/14 comprobaciones**, sin errores de consola |
 | \`pitest:mutationCoverage\` | **BUILD SUCCESS** · 21/21 mutaciones, 100 % de detección y 48/50 (96 %) de cobertura |
-| \`verificar-despliegue.mjs\` | **40/40 comprobaciones** |
-| Docker Compose PRE y PRO | 4 imágenes construidas; contenedores \`healthy\`, login, CRUD, \`401\` y persistencia H2 |
+| \`verificar-despliegue.mjs\` | **43/43 comprobaciones** |
+| Docker Compose PRE y PRO | 4 imágenes construidas; contenedores \`healthy\`, login, CRUD, \`401\`, datos mock, reset, consola H2, Swagger y persistencia H2 |
 | Página \`/documentacion\` | Correcta · 5 secciones, 10 documentos, 7 tablas y consola sin errores |
 | Migración de esquema heredado | Columna \`edad\` eliminada; CRUD y edades correctos |
 
@@ -3396,14 +3410,15 @@ un **token Bearer** que el frontend guarda en memoria y envía en la cabecera \`
 | \`DB_PASSWORD\` | *(vacía)* (\`dev\`/\`test\`) | Contraseña de la base de datos. Obligatoria en \`pre\`/\`prod\`. |
 | \`JPA_DDL_AUTO\` | \`update\` | Estrategia de esquema de Hibernate. |
 | \`JPA_SHOW_SQL\` | \`false\` | Muestra el SQL ejecutado en los logs. |
-| \`H2_CONSOLE_ENABLED\` | \`true\` (\`dev\`) | Activa la consola H2 en \`/h2-console\`. |
+| \`H2_CONSOLE_ENABLED\` | \`true\` (\`dev\`/\`pre\`/\`prod\`) | Activa la consola H2 en \`/h2-console\`. |
+| \`H2_CONSOLE_ALLOW_OTHERS\` | \`false\` | Permite el acceso a la consola desde otra IP. En Docker/Kubernetes se define \`true\`. |
 | \`CORS_ALLOWED_ORIGINS\` | \`http://localhost:5173,http://127.0.0.1:5173\` (\`dev\`/\`test\`) | Orígenes permitidos, separados por comas. Obligatorio en \`pre\`/\`prod\`. |
-| \`SEED_MOCK_DATA\` | \`true\` (\`dev\`), \`false\` (\`pre\`/\`prod\`) | Siembra los 10 datos mock si la tabla está vacía. |
+| \`SEED_MOCK_DATA\` | \`true\` (\`dev\`/\`pre\`/\`prod\`) | Siembra los 10 datos mock si la tabla está vacía. |
 | \`APP_AUTH_USERNAME\` | \`demo\` (\`dev\`/\`test\`) | Usuario del autologin. Obligatorio en \`pre\`/\`prod\`. |
 | \`APP_AUTH_PASSWORD\` | \`demo1234\` (\`dev\`/\`test\`) | Contraseña usada para generar el hash BCrypt. Obligatoria en \`pre\`/\`prod\`. |
 | \`APP_AUTH_ROLE\` | \`USER\` | Rol del usuario. |
 | \`APP_AUTH_TOKEN_TTL\` | \`15m\` (\`dev\`/\`test\`), \`10m\` (\`pre\`), \`5m\` (\`prod\`) | Vigencia del token Bearer. |
-| \`SPRINGDOC_ENABLED\` | \`true\` (\`dev\`/\`test\`), \`false\` (\`pre\`/\`prod\`) | Activa Swagger UI y \`/v3/api-docs\`. |
+| \`SPRINGDOC_ENABLED\` | \`true\` (\`dev\`/\`test\`/\`pre\`/\`prod\`) | Activa Swagger UI y \`/v3/api-docs\`. |
 | \`LOG_LEVEL\` | \`INFO\` (\`dev\`), \`WARN\` (\`pre\`/\`prod\`) | Nivel de log del paquete de la aplicación. |
 
 Ejemplo:
@@ -3578,7 +3593,7 @@ No debe aparecer la columna \`EDAD\`; sí deben aparecer las cuatro columnas de 
 - \`JPA_SHOW_SQL=true\` muestra el SQL de Hibernate.
 - \`GET /actuator/health\` devuelve el estado general.
 - \`GET /actuator/health/liveness\` y \`/actuator/health/readiness\` están preparados para Kubernetes.
-- \`/swagger-ui/index.html\` y \`/v3/api-docs\` permiten revisar y probar la API (\`dev\`/\`test\`).
+- \`/swagger-ui/index.html\` y \`/v3/api-docs\` permiten revisar y probar la API (\`dev\`/\`test\`/\`pre\`/\`prod\`).
 - \`/h2-console\` permite inspeccionar la base de datos en desarrollo.
 - \`POST /api/v1/auth/logout\` revoca el token actual; sirve para comprobar el ciclo de vida.
 
@@ -3614,7 +3629,7 @@ Antes de dar por buena una instalación local:
 | Error de CORS | Añadir el origen del frontend a \`CORS_ALLOWED_ORIGINS\`. |
 | \`Database may be already in use\` | Solo un proceso puede usar el fichero H2. Cerrar la otra instancia. |
 | H2 arranca en memoria | Falta \`application.yml\` en el classpath; revisar \`EJECUCION.md\`. |
-| La consola H2 no carga | Comprobar \`H2_CONSOLE_ENABLED=true\` y perfil \`dev\`. |
+| La consola H2 no carga | Comprobar \`H2_CONSOLE_ENABLED=true\`; en Docker/Kubernetes, \`H2_CONSOLE_ALLOW_OTHERS=true\`. |
 | La API devuelve \`401\` al probarla a mano | Falta el token: hacer \`POST /api/v1/auth/login\` y enviar \`Authorization: Bearer <token>\`. |
 | El autologin falla con \`401\` | \`VITE_AUTH_USERNAME\`/\`VITE_AUTH_PASSWORD\` no coinciden con \`APP_AUTH_*\`. |
 | La sesión caduca continuamente | Revisar \`APP_AUTH_TOKEN_TTL\`; el frontend renueva 60 s antes. |
@@ -3629,8 +3644,9 @@ Antes de dar por buena una instalación local:
 - En \`pre\` y \`prod\` los secretos (\`DB_*\`, \`APP_AUTH_*\`, \`CORS_ALLOWED_ORIGINS\`) deben inyectarse desde
   el entorno; no tienen valor por defecto. En Docker se leen de \`.env.<entorno>\`; en Kubernetes, del
   \`Secret pruebasopencode1-secrets\`.
-- La consola H2 y Swagger están desactivados fuera de desarrollo: \`H2_CONSOLE_ENABLED=false\` y
-  \`SPRINGDOC_ENABLED=false\` en \`pre\`/\`prod\`.
+- Por defecto, la consola H2 y Swagger están activos también en \`pre\`/\`prod\` para igualar el
+  comportamiento local. Antes de exponer un entorno real, definir \`H2_CONSOLE_ENABLED=false\` y
+  \`SPRINGDOC_ENABLED=false\`; el acceso a la consola debe quedar restringido a la red interna.
 - No exponer el puerto de H2 ni el fichero \`.mv.db\`.
 - No incluir contraseñas ni rutas específicas en el repositorio; usar variables de entorno y mantener
   los \`.env\` fuera de control de versiones.
@@ -3654,7 +3670,7 @@ contenerización y los manifiestos están implementados:
    compartido o JWT.
 5. **Salud**: Actuator expone \`liveness\`/\`readiness\`; Nginx expone \`/healthz\`.
 6. **Verificación**: \`node scripts\\verificar-despliegue.mjs\` valida Dockerfiles, Compose y Kustomize
-   sin clúster (**40/40**).
+   sin clúster (**43/43**).
 
 Antes de una implantación real: publicar las imágenes en un registro, sustituir hosts y certificados,
 crear secretos reales, configurar copias de seguridad y sustituir el autologin por autenticación
@@ -3941,9 +3957,10 @@ Antes de aplicar en un clúster real:
 | \`DB_URL\` | \`jdbc:h2:file:/app/data/pruebasopencode1\` | Igual |
 | \`DB_USERNAME\` / \`DB_PASSWORD\` | \`Secret\` | \`Secret\` |
 | \`JPA_DDL_AUTO\` | \`update\` | \`update\` |
-| \`H2_CONSOLE_ENABLED\` | \`false\` | \`false\` |
-| \`SPRINGDOC_ENABLED\` | \`false\` | \`false\` |
-| \`SEED_MOCK_DATA\` | \`false\` | \`false\` |
+| \`H2_CONSOLE_ENABLED\` | \`true\` | \`true\` |
+| \`H2_CONSOLE_ALLOW_OTHERS\` | \`true\` | \`true\` |
+| \`SPRINGDOC_ENABLED\` | \`true\` | \`true\` |
+| \`SEED_MOCK_DATA\` | \`true\` | \`true\` |
 | \`CORS_ALLOWED_ORIGINS\` | Dominio de PRE | Dominio de PRO |
 | \`APP_AUTH_USERNAME\` / \`APP_AUTH_PASSWORD\` | \`Secret\` | \`Secret\` |
 | \`APP_AUTH_ROLE\` | \`USER\` | \`USER\` |
@@ -3959,6 +3976,14 @@ Antes de aplicar en un clúster real:
 
 \`VITE_API_BASE_URL\` es relativa porque Nginx proxifica \`/api\`. Las credenciales \`VITE_AUTH_*\` se
 incrustan al construir la imagen: si cambian en el secreto, hay que reconstruir el frontend.
+
+PRE y PRO replican el comportamiento local: si la base está vacía se siembran los 10 datos mock, el
+reset vuelve a dejar esos 10 registros y la consola H2 y Swagger están activos. Nginx expone también
+\`/h2-console\`, \`/swagger-ui\`, \`/v3/api-docs\` y \`/actuator\` en el mismo origen que la SPA.
+
+\`H2_CONSOLE_ALLOW_OTHERS=true\` es necesario en Docker y Kubernetes porque la petición a la consola no
+llega desde \`127.0.0.1\`. Antes de exponer un entorno real, definir \`H2_CONSOLE_ENABLED=false\`,
+\`H2_CONSOLE_ALLOW_OTHERS=false\` y \`SPRINGDOC_ENABLED=false\`, y sustituir el autologin.
 
 ## 8. Persistencia H2 y copias
 
@@ -4018,12 +4043,14 @@ El 2026-11-09 se comprobó:
 | Construcción de \`pruebasopencode1-front:pro\` | Correcta |
 | Compose PRE: contenedores y sondas | 2/2 \`healthy\` |
 | Compose PRO: contenedores y sondas | 2/2 \`healthy\` |
+| Datos mock y reset (PRE y PRO) | 10 personas iniciales; reset restaura exactamente 10 |
+| Consola H2 y Swagger por el frontend | \`200\` en \`/h2-console\` y \`/swagger-ui/index.html\`; login H2 correcto en PRE y PRO |
 | SPA por Nginx (PRE y PRO) | \`200\`, fallback de rutas y assets |
 | API por proxy \`/api\` | Login, CRUD, \`401\` sin token y auditoría |
 | Perfil y TTL | PRE \`pre\`/\`10m\`; PRO \`prod\`/\`5m\` (299 s reales) |
 | Persistencia H2 | Datos conservados tras reiniciar el backend |
 | Kustomize PRE y PRO | Renderizado correcto |
-| Verificación automática de despliegue | **40/40 comprobaciones** |
+| Verificación automática de despliegue | **43/43 comprobaciones** |
 
 No se ejecutó \`kubectl apply\` porque el entorno no tenía un contexto de clúster configurado.
 
@@ -4179,13 +4206,24 @@ No se ejecutó \`kubectl apply\` porque el entorno no tenía un contexto de clú
 - [x] Añadir las plantillas \`.env.pre.example\` y \`.env.pro.example\` y los scripts \`construir.ps1\`, \`levantar.ps1\` y \`parar.ps1\`.
 - [x] Crear la base Kustomize y los overlays \`pre\` y \`pro\`, con namespaces, ConfigMap, PVC, Ingress, TLS, HPA y PDB.
 - [x] Mantener una sola réplica de backend y estrategia \`Recreate\` por la limitación de H2 en fichero.
-- [x] Crear \`scripts/verificar-despliegue.mjs\` y el comando \`npm run test:deploy\` (**40 comprobaciones**).
+- [x] Crear \`scripts/verificar-despliegue.mjs\` y el comando \`npm run test:deploy\` (**43 comprobaciones**).
 - [x] Integrar la tabla de despliegue en la documentación viva (\`/documentacion\`).
 - [x] Construir las cuatro imágenes y probar PRE y PRO con Docker Compose.
 - [x] Verificar en contenedores: SPA, fallback, assets, login, CRUD, \`401\` sin token, perfiles y TTL.
 - [x] Verificar la persistencia de H2 tras reiniciar el backend.
 - [x] Renderizar ambos overlays con \`kubectl kustomize\` y validar Compose con \`docker compose config\`.
 - [x] Actualizar \`README.md\`, \`AGENTS.md\`, \`DESPLIEGUE.md\`, \`ARQUITECTURA.md\`, \`EJECUCION.md\`, \`PRUEBAS.md\`, \`OPERACION.md\`, \`PROMPT.md\` y \`deploy/README.md\`.
+
+### Fase 13. Paridad funcional de PRE y PRO con local
+
+- [x] Activar \`SEED_MOCK_DATA=true\`, \`H2_CONSOLE_ENABLED=true\` y \`SPRINGDOC_ENABLED=true\` por defecto en los perfiles \`pre\` y \`prod\`.
+- [x] Añadir \`H2_CONSOLE_ALLOW_OTHERS\`, con \`true\` en Compose y Kubernetes para permitir el acceso desde la red interna.
+- [x] Publicar \`/h2-console\`, \`/swagger-ui\`, \`/v3/api-docs\` y \`/actuator\` a través de Nginx en el mismo origen que la SPA.
+- [x] Actualizar las plantillas \`.env.pre.example\` y \`.env.pro.example\` y el ConfigMap base.
+- [x] Ampliar \`scripts/verificar-despliegue.mjs\` de 40 a **43 comprobaciones**.
+- [x] Reconstruir las cuatro imágenes y verificar en Docker: 10 datos mock, reset, CRUD, \`401\`, consola H2 y Swagger.
+- [x] Verificar la persistencia de H2 tras reiniciar el backend en ambos entornos.
+- [x] Actualizar la documentación y regenerar la página \`/documentacion\`.
 
 ## 2. Resultados de verificación (2026-11-09)
 
@@ -4198,7 +4236,7 @@ No se ejecutó \`kubectl apply\` porque el entorno no tenía un contexto de clú
 | Interfaz real en navegador | \`npm.cmd run test:ui\` (en \`/front\`) | **14/14 comprobaciones**, sin errores de consola |
 | Mutation testing | \`back\\mvnw.cmd -B test-compile org.pitest:pitest-maven:mutationCoverage\` | **BUILD SUCCESS** · 21/21 mutaciones, 100 % de detección y 48/50 (96 %) de cobertura |
 | Documentación viva | \`npm run build\` + Chrome headless sobre Vite | **Correcta** · secciones, tablas de resultados y consola sin errores |
-| Verificación de despliegue | \`node scripts\\verificar-despliegue.mjs\` | **40/40 comprobaciones** |
+| Verificación de despliegue | \`node scripts\\verificar-despliegue.mjs\` | **43/43 comprobaciones** |
 | Imágenes Docker | \`back:pre\`, \`front:pre\`, \`back:pro\`, \`front:pro\` | **4/4 construidas** correctamente |
 | Compose PRE | \`.\\deploy\\docker\\levantar.ps1 -Entorno pre\` | **2/2 contenedores \`healthy\`** · SPA, API, login, CRUD, \`401\` y persistencia H2 |
 | Compose PRO | \`.\\deploy\\docker\\levantar.ps1 -Entorno pro\` | **2/2 contenedores \`healthy\`** · perfil \`prod\`, TTL 299 s y CRUD |
@@ -4275,10 +4313,13 @@ Con Docker 28.0.1 y Compose v2.33.1:
 5. El proxy \`/api\` funciona: login, listado, creación, eliminación y \`401\` sin token.
 6. El backend y el frontend quedan \`healthy\` en ambos entornos.
 7. H2 conserva los datos tras reiniciar el contenedor del backend.
-8. \`kubectl kustomize\` renderiza PRE y PRO con namespaces, ConfigMap, PVC, Deployments, Services,
-   Ingress, y en PRO también HPA y PDB.
-9. \`docker compose config --quiet\` valida ambas plantillas de entorno.
-10. La suite \`scripts/verificar-despliegue.mjs\` supera **40/40 comprobaciones**.
+8. Si la base está vacía se siembran 10 personas mock; el reset restaura exactamente esas 10.
+9. La consola H2 (incluido el login a la base de datos) y Swagger responden por el puerto del
+   frontend y por el backend directo.
+10. \`kubectl kustomize\` renderiza PRE y PRO con namespaces, ConfigMap, PVC, Deployments, Services,
+    Ingress, y en PRO también HPA y PDB.
+11. \`docker compose config --quiet\` valida ambas plantillas de entorno.
+12. La suite \`scripts/verificar-despliegue.mjs\` supera **43/43 comprobaciones**.
 
 No se ejecutó \`kubectl apply\` porque el entorno no tenía un contexto de Kubernetes configurado.
 
@@ -4310,6 +4351,9 @@ No se ejecutó \`kubectl apply\` porque el entorno no tenía un contexto de Kube
 | 2026-11-09 | Perfiles \`dev\`/\`test\`/\`pre\`/\`prod\` con secretos externalizados | Evita secretos versionados y permite cambiar de entorno sin tocar código. |
 | 2026-11-09 | Tema oscuro con preferencia \`sistema\` | Mejora la accesibilidad y respeta la preferencia del sistema, persistida en \`localStorage\`. |
 | 2026-11-09 | \`ErrorBoundary\` en React | Evita que un error de renderizado deje la aplicación en blanco. |
+| 2026-11-09 | Paridad funcional de PRE/PRO con local | PRE y PRO siembran los 10 datos mock, permiten reset y exponen consola H2 y Swagger por defecto, para que el comportamiento sea idéntico al local. Se documenta que un entorno real debe desactivar consola/Swagger y sustituir el autologin. |
+| 2026-11-09 | \`H2_CONSOLE_ALLOW_OTHERS=true\` en Docker/Kubernetes | La consola solo acepta peticiones de \`127.0.0.1\` por defecto; dentro de un contenedor la petición llega desde la red interna. Se limita al entorno interno y se puede desactivar por variable. |
+| 2026-11-09 | Nginx publica consola, Swagger y Actuator | Permite usar las mismas herramientas que en local desde el mismo origen de la SPA, sin abrir puertos adicionales del backend. |
 | 2026-11-09 | Dos imágenes Docker independientes | Backend y frontend tienen ciclos de vida y escalado distintos; se evita acoplar sus builds. |
 | 2026-11-09 | Nginx sin privilegios sirve la SPA y proxifica \`/api\` | La interfaz y la API comparten origen; no se necesita CORS para el tráfico del navegador. |
 | 2026-11-09 | Backend sin root (UID 10001) y root FS de solo lectura | Reduce la superficie de ataque; \`/app/data\` y \`/tmp\` se montan explícitamente. |
@@ -4437,6 +4481,9 @@ No hay problemas bloqueantes para el alcance actual. Limitaciones y siguientes p
 8. **Internacionalización:** la interfaz está en español; no se ha implementado multiidioma.
 9. **Mutation testing:** PIT cubre solo el servicio y el mapper; controladores, entidades y
    configuración no se mutan. Todavía no está integrado en un pipeline de CI.
+10. **Consola H2 y Swagger activos por defecto en PRE/PRO:** es una decisión deliberada para igualar
+    el comportamiento local. En un entorno expuesto hay que definir \`H2_CONSOLE_ENABLED=false\`,
+    \`H2_CONSOLE_ALLOW_OTHERS=false\` y \`SPRINGDOC_ENABLED=false\`.
 
 ## 7. Cómo continuar
 
@@ -4863,7 +4910,7 @@ export const RESULTADOS: GrupoResultados[] = [
     "descripcion": "Dockerfiles, Nginx, Docker Compose y overlays Kustomize de PRE y PRO, sin necesidad de clúster.",
     "comando": "front\\npm run test:deploy",
     "fecha": "2026-11-09",
-    "resumen": "40/40 comprobaciones superadas",
+    "resumen": "43/43 comprobaciones superadas",
     "columnas": [
       "Comprobación",
       "Resultado"
@@ -4918,7 +4965,15 @@ export const RESULTADOS: GrupoResultados[] = [
         "Superada"
       ],
       [
+        "Nginx: consola H2, Swagger y Actuator accesibles",
+        "Superada"
+      ],
+      [
         ".dockerignore excluye secretos y artefactos",
+        "Superada"
+      ],
+      [
+        "Compose: datos mock y herramientas como en local",
         "Superada"
       ],
       [
@@ -5015,6 +5070,10 @@ export const RESULTADOS: GrupoResultados[] = [
       ],
       [
         "  sin Secret versionado en PRO",
+        "Superada"
+      ],
+      [
+        "PRE y PRO: datos mock, consola H2 y Swagger activos",
         "Superada"
       ],
       [

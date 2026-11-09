@@ -19,13 +19,20 @@ spring:
 
   h2:
     console:
-      enabled: false
+      # Igual que en local: consola H2 disponible. Se puede desactivar con
+      # H2_CONSOLE_ENABLED=false en entornos expuestos.
+      enabled: ${H2_CONSOLE_ENABLED:true}
+      path: /h2-console
+      settings:
+        # En Docker/Kubernetes la petición llega desde la red interna, no desde
+        # 127.0.0.1; el despliegue define H2_CONSOLE_ALLOW_OTHERS=true.
+        web-allow-others: ${H2_CONSOLE_ALLOW_OTHERS:false}
 
 springdoc:
   api-docs:
-    enabled: false
+    enabled: ${SPRINGDOC_ENABLED:true}
   swagger-ui:
-    enabled: false
+    enabled: ${SPRINGDOC_ENABLED:true}
 
 server:
   error:
@@ -36,7 +43,8 @@ app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS}
   mock-data:
-    seed-on-startup: false
+    # Igual que en local: si la base está vacía se siembran los 10 datos mock.
+    seed-on-startup: ${SEED_MOCK_DATA:true}
   auth:
     username: ${APP_AUTH_USERNAME}
     password: ${APP_AUTH_PASSWORD}

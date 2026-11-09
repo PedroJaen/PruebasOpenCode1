@@ -33,14 +33,15 @@ un **token Bearer** que el frontend guarda en memoria y envía en la cabecera `A
 | `DB_PASSWORD` | *(vacía)* (`dev`/`test`) | Contraseña de la base de datos. Obligatoria en `pre`/`prod`. |
 | `JPA_DDL_AUTO` | `update` | Estrategia de esquema de Hibernate. |
 | `JPA_SHOW_SQL` | `false` | Muestra el SQL ejecutado en los logs. |
-| `H2_CONSOLE_ENABLED` | `true` (`dev`) | Activa la consola H2 en `/h2-console`. |
+| `H2_CONSOLE_ENABLED` | `true` (`dev`/`pre`/`prod`) | Activa la consola H2 en `/h2-console`. |
+| `H2_CONSOLE_ALLOW_OTHERS` | `false` | Permite el acceso a la consola desde otra IP. En Docker/Kubernetes se define `true`. |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` (`dev`/`test`) | Orígenes permitidos, separados por comas. Obligatorio en `pre`/`prod`. |
-| `SEED_MOCK_DATA` | `true` (`dev`), `false` (`pre`/`prod`) | Siembra los 10 datos mock si la tabla está vacía. |
+| `SEED_MOCK_DATA` | `true` (`dev`/`pre`/`prod`) | Siembra los 10 datos mock si la tabla está vacía. |
 | `APP_AUTH_USERNAME` | `demo` (`dev`/`test`) | Usuario del autologin. Obligatorio en `pre`/`prod`. |
 | `APP_AUTH_PASSWORD` | `demo1234` (`dev`/`test`) | Contraseña usada para generar el hash BCrypt. Obligatoria en `pre`/`prod`. |
 | `APP_AUTH_ROLE` | `USER` | Rol del usuario. |
 | `APP_AUTH_TOKEN_TTL` | `15m` (`dev`/`test`), `10m` (`pre`), `5m` (`prod`) | Vigencia del token Bearer. |
-| `SPRINGDOC_ENABLED` | `true` (`dev`/`test`), `false` (`pre`/`prod`) | Activa Swagger UI y `/v3/api-docs`. |
+| `SPRINGDOC_ENABLED` | `true` (`dev`/`test`/`pre`/`prod`) | Activa Swagger UI y `/v3/api-docs`. |
 | `LOG_LEVEL` | `INFO` (`dev`), `WARN` (`pre`/`prod`) | Nivel de log del paquete de la aplicación. |
 
 Ejemplo:
@@ -215,7 +216,7 @@ No debe aparecer la columna `EDAD`; sí deben aparecer las cuatro columnas de au
 - `JPA_SHOW_SQL=true` muestra el SQL de Hibernate.
 - `GET /actuator/health` devuelve el estado general.
 - `GET /actuator/health/liveness` y `/actuator/health/readiness` están preparados para Kubernetes.
-- `/swagger-ui/index.html` y `/v3/api-docs` permiten revisar y probar la API (`dev`/`test`).
+- `/swagger-ui/index.html` y `/v3/api-docs` permiten revisar y probar la API (`dev`/`test`/`pre`/`prod`).
 - `/h2-console` permite inspeccionar la base de datos en desarrollo.
 - `POST /api/v1/auth/logout` revoca el token actual; sirve para comprobar el ciclo de vida.
 
@@ -251,7 +252,7 @@ Antes de dar por buena una instalación local:
 | Error de CORS | Añadir el origen del frontend a `CORS_ALLOWED_ORIGINS`. |
 | `Database may be already in use` | Solo un proceso puede usar el fichero H2. Cerrar la otra instancia. |
 | H2 arranca en memoria | Falta `application.yml` en el classpath; revisar `EJECUCION.md`. |
-| La consola H2 no carga | Comprobar `H2_CONSOLE_ENABLED=true` y perfil `dev`. |
+| La consola H2 no carga | Comprobar `H2_CONSOLE_ENABLED=true`; en Docker/Kubernetes, `H2_CONSOLE_ALLOW_OTHERS=true`. |
 | La API devuelve `401` al probarla a mano | Falta el token: hacer `POST /api/v1/auth/login` y enviar `Authorization: Bearer <token>`. |
 | El autologin falla con `401` | `VITE_AUTH_USERNAME`/`VITE_AUTH_PASSWORD` no coinciden con `APP_AUTH_*`. |
 | La sesión caduca continuamente | Revisar `APP_AUTH_TOKEN_TTL`; el frontend renueva 60 s antes. |
@@ -266,8 +267,9 @@ Antes de dar por buena una instalación local:
 - En `pre` y `prod` los secretos (`DB_*`, `APP_AUTH_*`, `CORS_ALLOWED_ORIGINS`) deben inyectarse desde
   el entorno; no tienen valor por defecto. En Docker se leen de `.env.<entorno>`; en Kubernetes, del
   `Secret pruebasopencode1-secrets`.
-- La consola H2 y Swagger están desactivados fuera de desarrollo: `H2_CONSOLE_ENABLED=false` y
-  `SPRINGDOC_ENABLED=false` en `pre`/`prod`.
+- Por defecto, la consola H2 y Swagger están activos también en `pre`/`prod` para igualar el
+  comportamiento local. Antes de exponer un entorno real, definir `H2_CONSOLE_ENABLED=false` y
+  `SPRINGDOC_ENABLED=false`; el acceso a la consola debe quedar restringido a la red interna.
 - No exponer el puerto de H2 ni el fichero `.mv.db`.
 - No incluir contraseñas ni rutas específicas en el repositorio; usar variables de entorno y mantener
   los `.env` fuera de control de versiones.
@@ -291,7 +293,7 @@ contenerización y los manifiestos están implementados:
    compartido o JWT.
 5. **Salud**: Actuator expone `liveness`/`readiness`; Nginx expone `/healthz`.
 6. **Verificación**: `node scripts\verificar-despliegue.mjs` valida Dockerfiles, Compose y Kustomize
-   sin clúster (**40/40**).
+   sin clúster (**43/43**).
 
 Antes de una implantación real: publicar las imágenes en un registro, sustituir hosts y certificados,
 crear secretos reales, configurar copias de seguridad y sustituir el autologin por autenticación

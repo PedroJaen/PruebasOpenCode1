@@ -11,7 +11,7 @@ deploy/
 ├── docker/
 │   ├── back.Dockerfile          # Maven + JDK 21 → JRE 21 sin root
 │   ├── front.Dockerfile         # Node + Vite → Nginx sin privilegios
-│   ├── nginx.conf               # SPA, proxy /api y /healthz
+│   ├── nginx.conf               # SPA, proxy /api, /healthz, H2, Swagger y Actuator
 │   ├── docker-compose.yml       # PRE/PRO con variables de entorno
 │   ├── .env.pre.example         # plantilla de PRE
 │   ├── .env.pro.example         # plantilla de PRO
@@ -68,7 +68,14 @@ Comprobaciones:
 Invoke-RestMethod http://localhost:8081/actuator/health
 Invoke-WebRequest http://localhost:8088/healthz -UseBasicParsing
 Start-Process http://localhost:8088
+# Consola H2 y Swagger por el mismo origen que la SPA
+Start-Process http://localhost:8088/h2-console
+Start-Process http://localhost:8088/swagger-ui/index.html
 ```
+
+PRE y PRO se comportan como el entorno local: si la base está vacía se siembran 10 datos mock, el
+reset restaura esos 10 registros y la consola H2 y Swagger están activos. `H2_CONSOLE_ALLOW_OTHERS=true`
+es necesario dentro de un contenedor porque la petición no llega desde `127.0.0.1`.
 
 Detener y eliminar datos:
 
@@ -135,5 +142,8 @@ Comprueba Dockerfiles, Nginx, Compose PRE/PRO y el renderizado Kustomize de ambo
   que sustituirlo por autenticación individual.
 - **Secretos:** los ejemplos no son secretos reales. Usar un gestor de secretos o `kubectl create
   secret` con valores propios.
+- **Consola H2 y Swagger:** activos por defecto para igualar el comportamiento local. En un entorno
+  expuesto hay que definir `H2_CONSOLE_ENABLED=false`, `H2_CONSOLE_ALLOW_OTHERS=false` y
+  `SPRINGDOC_ENABLED=false`.
 - **Registro e Ingress:** las imágenes y los hosts de los overlays son valores de ejemplo; hay que
   adaptarlos al entorno real.

@@ -21,7 +21,7 @@ a las pruebas de carga o seguridad de un entorno real.
 | Integración de extremo a extremo | Node.js + `fetch` a través del proxy de Vite | 18 comprobaciones | Flujo real frontend → proxy → autologin → API → H2 → auditoría. |
 | Interfaz con navegador | Playwright Core + Chrome/Edge del sistema | 14 comprobaciones | Pantallas, autologin transparente, formularios, confirmaciones, notificaciones, tema oscuro y consola del navegador. |
 | Mutación de backend | PIT 1.30.2 + JUnit 5 | 21 mutaciones | Servicio y mapper: CRUD, cálculo de edad, limpieza de datos y actualización. |
-| Despliegue | Docker, Docker Compose y Kustomize | 40 comprobaciones | Dockerfiles, Nginx, Compose PRE/PRO y overlays Kubernetes, sin clúster. |
+| Despliegue | Docker, Docker Compose y Kustomize | 43 comprobaciones | Dockerfiles, Nginx, Compose PRE/PRO y overlays Kubernetes, sin clúster. |
 | Migración de esquema | Verificación manual con H2 antigua | — | Retirada de la columna heredada `edad` y funcionamiento posterior del CRUD. |
 
 Total de pruebas de backend en `clean verify`: **34** (11 unitarias + 14 de integración de personas +
@@ -310,8 +310,8 @@ Resultados de la última verificación funcional (2026-11-09):
 | `verificar-integracion.mjs` | **18/18 comprobaciones** |
 | `verificar-ui.mjs` | **14/14 comprobaciones**, sin errores de consola |
 | `pitest:mutationCoverage` | **BUILD SUCCESS** · 21/21 mutaciones, 100 % de detección y 48/50 (96 %) de cobertura |
-| `verificar-despliegue.mjs` | **40/40 comprobaciones** |
-| Docker Compose PRE y PRO | 4 imágenes construidas; contenedores `healthy`, login, CRUD, `401` y persistencia H2 |
+| `verificar-despliegue.mjs` | **43/43 comprobaciones** |
+| Docker Compose PRE y PRO | 4 imágenes construidas; contenedores `healthy`, login, CRUD, `401`, datos mock, reset, consola H2, Swagger y persistencia H2 |
 | Página `/documentacion` | Correcta · 5 secciones, 10 documentos, 7 tablas y consola sin errores |
 | Migración de esquema heredado | Columna `edad` eliminada; CRUD y edades correctos |
 

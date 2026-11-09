@@ -261,9 +261,10 @@ Antes de aplicar en un clúster real:
 | `DB_URL` | `jdbc:h2:file:/app/data/pruebasopencode1` | Igual |
 | `DB_USERNAME` / `DB_PASSWORD` | `Secret` | `Secret` |
 | `JPA_DDL_AUTO` | `update` | `update` |
-| `H2_CONSOLE_ENABLED` | `false` | `false` |
-| `SPRINGDOC_ENABLED` | `false` | `false` |
-| `SEED_MOCK_DATA` | `false` | `false` |
+| `H2_CONSOLE_ENABLED` | `true` | `true` |
+| `H2_CONSOLE_ALLOW_OTHERS` | `true` | `true` |
+| `SPRINGDOC_ENABLED` | `true` | `true` |
+| `SEED_MOCK_DATA` | `true` | `true` |
 | `CORS_ALLOWED_ORIGINS` | Dominio de PRE | Dominio de PRO |
 | `APP_AUTH_USERNAME` / `APP_AUTH_PASSWORD` | `Secret` | `Secret` |
 | `APP_AUTH_ROLE` | `USER` | `USER` |
@@ -279,6 +280,14 @@ Antes de aplicar en un clúster real:
 
 `VITE_API_BASE_URL` es relativa porque Nginx proxifica `/api`. Las credenciales `VITE_AUTH_*` se
 incrustan al construir la imagen: si cambian en el secreto, hay que reconstruir el frontend.
+
+PRE y PRO replican el comportamiento local: si la base está vacía se siembran los 10 datos mock, el
+reset vuelve a dejar esos 10 registros y la consola H2 y Swagger están activos. Nginx expone también
+`/h2-console`, `/swagger-ui`, `/v3/api-docs` y `/actuator` en el mismo origen que la SPA.
+
+`H2_CONSOLE_ALLOW_OTHERS=true` es necesario en Docker y Kubernetes porque la petición a la consola no
+llega desde `127.0.0.1`. Antes de exponer un entorno real, definir `H2_CONSOLE_ENABLED=false`,
+`H2_CONSOLE_ALLOW_OTHERS=false` y `SPRINGDOC_ENABLED=false`, y sustituir el autologin.
 
 ## 8. Persistencia H2 y copias
 
@@ -338,12 +347,14 @@ El 2026-11-09 se comprobó:
 | Construcción de `pruebasopencode1-front:pro` | Correcta |
 | Compose PRE: contenedores y sondas | 2/2 `healthy` |
 | Compose PRO: contenedores y sondas | 2/2 `healthy` |
+| Datos mock y reset (PRE y PRO) | 10 personas iniciales; reset restaura exactamente 10 |
+| Consola H2 y Swagger por el frontend | `200` en `/h2-console` y `/swagger-ui/index.html`; login H2 correcto en PRE y PRO |
 | SPA por Nginx (PRE y PRO) | `200`, fallback de rutas y assets |
 | API por proxy `/api` | Login, CRUD, `401` sin token y auditoría |
 | Perfil y TTL | PRE `pre`/`10m`; PRO `prod`/`5m` (299 s reales) |
 | Persistencia H2 | Datos conservados tras reiniciar el backend |
 | Kustomize PRE y PRO | Renderizado correcto |
-| Verificación automática de despliegue | **40/40 comprobaciones** |
+| Verificación automática de despliegue | **43/43 comprobaciones** |
 
 No se ejecutó `kubectl apply` porque el entorno no tenía un contexto de clúster configurado.
 

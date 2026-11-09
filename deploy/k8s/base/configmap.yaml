@@ -11,9 +11,10 @@ data:
   SERVER_PORT: "8080"
   DB_URL: jdbc:h2:file:/app/data/pruebasopencode1
   JPA_DDL_AUTO: update
-  H2_CONSOLE_ENABLED: "false"
-  SPRINGDOC_ENABLED: "false"
-  SEED_MOCK_DATA: "false"
+  H2_CONSOLE_ENABLED: "true"
+  H2_CONSOLE_ALLOW_OTHERS: "true"
+  SPRINGDOC_ENABLED: "true"
+  SEED_MOCK_DATA: "true"
   APP_AUTH_ROLE: USER
   APP_AUTH_TOKEN_TTL: 10m
   LOG_LEVEL: INFO

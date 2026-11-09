@@ -1,7 +1,7 @@
 {
   "fecha": "2026-11-09",
-  "total": 40,
-  "superadas": 40,
+  "total": 43,
+  "superadas": 43,
   "fallidas": 0,
   "comprobaciones": [
     {
@@ -77,8 +77,20 @@
       "detalle": ""
     },
     {
+      "nombre": "Nginx: consola H2, Swagger y Actuator accesibles",
+      "comando": "nginx.conf",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
       "nombre": ".dockerignore excluye secretos y artefactos",
       "comando": ".dockerignore",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "Compose: datos mock y herramientas como en local",
+      "comando": "docker-compose.yml",
       "resultado": "Superada",
       "detalle": ""
     },
@@ -222,6 +234,12 @@
     },
     {
       "nombre": "  sin Secret versionado en PRO",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "PRE y PRO: datos mock, consola H2 y Swagger activos",
       "comando": "kubectl kustomize",
       "resultado": "Superada",
       "detalle": ""
