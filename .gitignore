@@ -19,6 +19,7 @@ deploy/docker/.env
 deploy/docker/.env.pre
 deploy/docker/.env.pro
 deploy/docker/.env.*.local
+deploy/docker/imagenes/
 deploy/k8s/**/secrets.env
 deploy/k8s/**/secret.local.yaml
 

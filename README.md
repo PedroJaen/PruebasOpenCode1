@@ -156,6 +156,19 @@ los problemas frecuentes están en
 [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md#43-construcción-de-las-imágenes) y
 [`deploy/README.md`](deploy/README.md).
 
+Si el clúster no puede descargar de un registro, exportar las imágenes a `.tar` y cargarlas en cada
+nodo:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy\docker\exportar.ps1 -Entorno pre
+# Genera pruebasopencode1-back-pre.tar, pruebasopencode1-front-pre.tar y SHA256SUMS.txt
+# En el nodo: docker load -i ... | sudo ctr -n k8s.io images import ...
+```
+
+Los manifiestos usan `imagePullPolicy: IfNotPresent`; para actualizar hay que usar una etiqueta nueva
+y cambiarla en el overlay. Guía completa:
+[`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md#44-exportar-las-imágenes-a-tar-sin-registro).
+
 Kubernetes:
 
 ```powershell

@@ -68,6 +68,7 @@ deploy/
 │   ├── .env.pre.example
 │   ├── .env.pro.example
 │   ├── construir.ps1
+│   ├── exportar.ps1
 │   ├── levantar.ps1
 │   └── parar.ps1
 └── k8s/
@@ -258,6 +259,134 @@ En Kubernetes hay que ajustar `images.newName` del overlay al nombre publicado e
 | Cambios que no aparecen | Reconstruir la imagen afectada y recrear: `docker compose ... up -d --force-recreate`. |
 | Puerto ocupado | Cambiar `FRONT_PORT` o `BACK_PORT` en `.env.<entorno>`. |
 | Imagen para otra arquitectura | Construir en la arquitectura destino o añadir `--platform linux/amd64`. |
+
+### 4.4 Exportar las imágenes a `.tar` (sin registro)
+
+Cuando el clúster no puede descargar de un registro (por ejemplo, una red de empresa aislada), las
+imágenes se transportan como ficheros `.tar` y se cargan en el runtime de cada nodo.
+
+#### Paso 1: exportar
+
+Con las imágenes ya construidas (`construir.ps1`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy\docker\exportar.ps1 -Entorno pre
+powershell -ExecutionPolicy Bypass -File .\deploy\docker\exportar.ps1 -Entorno todos -Directorio D:\artefactos\pruebasopencode1
+```
+
+El script genera en `deploy/docker/imagenes/` (excluido de Git):
+
+| Fichero | Contenido |
+| --- | --- |
+| `pruebasopencode1-back-<entorno>.tar` | Imagen del backend. |
+| `pruebasopencode1-front-<entorno>.tar` | Imagen del frontend. |
+| `SHA256SUMS.txt` | SHA-256, nombre, imagen y tamaño de cada `.tar`. |
+
+Equivalente con Docker directamente:
+
+```powershell
+docker save -o pruebasopencode1-back-pre.tar pruebasopencode1-back:pre
+docker save -o pruebasopencode1-front-pre.tar pruebasopencode1-front:pre
+Get-FileHash -Algorithm SHA256 .\pruebasopencode1-back-pre.tar
+```
+
+`docker save` conserva el nombre y la etiqueta de la imagen. Si se construyó en otro equipo, hay que
+respetar el nombre (`pruebasopencode1-back:<entorno>`) para que coincida con lo que espera Kustomize.
+
+> Los `.tar` de estas imágenes pesan aproximadamente 190 MB (backend) y 21 MB (frontend). No se
+> versionan: `deploy/docker/imagenes/` está en `.gitignore`.
+
+#### Paso 2: copiar al nodo
+
+```powershell
+scp .\deploy\docker\imagenes\pruebasopencode1-*-pre.tar .\SHA256SUMS.txt usuario@nodo:/tmp/
+```
+
+En el nodo, verificar antes de cargar:
+
+```bash
+cd /tmp
+sha256sum -c SHA256SUMS.txt
+```
+
+#### Paso 3: cargar en el runtime de Kubernetes
+
+Elegir el comando según el runtime del clúster **en cada nodo que pueda ejecutar el pod**:
+
+| Runtime | Comando |
+| --- | --- |
+| Docker | `docker load -i pruebasopencode1-back-pre.tar` |
+| containerd | `sudo ctr -n k8s.io images import pruebasopencode1-back-pre.tar` |
+| k3s | `sudo k3s ctr images import pruebasopencode1-back-pre.tar` |
+| kind | `kind load image-archive pruebasopencode1-back-pre.tar` |
+| minikube | `minikube image load pruebasopencode1-back-pre.tar` |
+
+Comprobar que la imagen existe en el runtime:
+
+```bash
+sudo ctr -n k8s.io images ls | grep pruebasopencode1
+# o, con Docker:
+docker images --filter "reference=pruebasopencode1-*"
+```
+
+Si hay varios nodos, repetir la carga en **todos** los que puedan recibir el pod. En un clúster con
+varios nodos también se puede copiar el `.tar` y cargarlo mediante un `DaemonSet` privilegiado, pero
+lo habitual en redes aisladas es cargarlo por SSH en cada nodo o habilitar un registro interno.
+
+> `ctr -n k8s.io` es obligatorio en containerd: sin el namespace `k8s.io` la imagen se carga en otro
+> namespace y el kubelet no la encuentra. En k3s, `k3s ctr` ya apunta al containerd correcto.
+
+#### Paso 4: desplegar
+
+Los manifiestos ya usan `imagePullPolicy: IfNotPresent`, por lo que Kubernetes no intenta descargar
+la imagen si está cargada en el nodo:
+
+```powershell
+kubectl apply -k deploy/k8s/overlays/pre
+kubectl -n pruebasopencode1-pre rollout status deployment/back
+kubectl -n pruebasopencode1-pre rollout status deployment/front
+kubectl -n pruebasopencode1-pre get pods -o wide
+```
+
+El overlay `pre` referencia `pruebasopencode1-back:pre` y `pruebasopencode1-front:pre`; `pro` usa las
+etiquetas `:pro`. No hay que cambiar `newName` si se mantienen esos nombres al exportar.
+
+#### Reemplazar una versión ya cargada
+
+Con `IfNotPresent` y la misma etiqueta, Kubernetes reutiliza la imagen antigua del nodo. Para
+actualizar:
+
+1. Construir y exportar una etiqueta nueva, por ejemplo `pruebasopencode1-back:pre-20261109`.
+2. Cargarla en los nodos.
+3. Actualizar la etiqueta en `deploy/k8s/overlays/pre/kustomization.yaml`:
+
+   ```yaml
+   images:
+     - name: pruebasopencode1-back
+       newTag: pre-20261109
+     - name: pruebasopencode1-front
+       newTag: pre-20261109
+   ```
+
+4. Aplicar el overlay y comprobar el rollout.
+
+Evitar `latest`: con `IfNotPresent` no se actualiza y con `Always` obliga a descargar de un registro.
+
+#### Arquitectura y plataforma
+
+`docker save` exporta la imagen para la arquitectura del host donde se construyó. Si se construye en
+un Mac ARM y el clúster es `amd64`, construir con la plataforma destino:
+
+```powershell
+docker build --platform linux/amd64 -f deploy/docker/back.Dockerfile -t pruebasopencode1-back:pre .
+docker build --platform linux/amd64 -f deploy/docker/front.Dockerfile `
+  --build-arg VITE_API_BASE_URL=/api/v1 `
+  --build-arg VITE_AUTH_USERNAME=demo `
+  --build-arg VITE_AUTH_PASSWORD=demo1234 `
+  -t pruebasopencode1-front:pre .
+```
+
+Después, exportar y cargar como en los pasos anteriores.
 
 ## 5. Docker Compose para PRE y PRO
 

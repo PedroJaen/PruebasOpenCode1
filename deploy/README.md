@@ -16,6 +16,7 @@ deploy/
 │   ├── .env.pre.example         # plantilla de PRE
 │   ├── .env.pro.example         # plantilla de PRO
 │   ├── construir.ps1            # construye las dos imágenes
+│   ├── exportar.ps1             # exporta las imágenes a .tar con checksums
 │   ├── levantar.ps1             # docker compose up
 │   └── parar.ps1                # docker compose down
 └── k8s/
@@ -178,6 +179,34 @@ kubectl -n pruebasopencode1-pre rollout status deployment/front
 
 Para PRO se repite con `pruebasopencode1-pro`, `APP_AUTH_TOKEN_TTL=5m`, 2 réplicas de frontend, HPA y
 PDB. El backend de PRO mantiene **1 réplica** por la limitación de H2 en fichero.
+
+### Kubernetes sin registro: imágenes `.tar`
+
+Si el clúster no puede descargar de un registro, exportar las imágenes y cargarlas en cada nodo:
+
+```powershell
+# 1. Exportar (genera los .tar y SHA256SUMS.txt en deploy/docker/imagenes/)
+powershell -ExecutionPolicy Bypass -File .\deploy\docker\exportar.ps1 -Entorno pre
+
+# 2. Copiar a cada nodo y verificar
+scp .\deploy\docker\imagenes\pruebasopencode1-*-pre.tar .\SHA256SUMS.txt usuario@nodo:/tmp/
+# En el nodo: cd /tmp && sha256sum -c SHA256SUMS.txt
+
+# 3. Cargar según el runtime (repetir en todos los nodos que puedan ejecutar el pod)
+docker load -i pruebasopencode1-back-pre.tar              # Docker
+sudo ctr -n k8s.io images import pruebasopencode1-back-pre.tar   # containerd
+sudo k3s ctr images import pruebasopencode1-back-pre.tar  # k3s
+kind load image-archive pruebasopencode1-back-pre.tar     # kind
+minikube image load pruebasopencode1-back-pre.tar         # minikube
+
+# 4. Desplegar (los manifiestos usan imagePullPolicy: IfNotPresent)
+kubectl apply -k deploy/k8s/overlays/pre
+```
+
+Con `IfNotPresent`, para actualizar hay que usar una etiqueta nueva (`pre-20261109`), cargarla en los
+nodos y cambiarla en `images.newTag` del overlay. No usar `latest`. La guía completa, con
+arquitectura y comprobaciones, está en
+[`docs/DESPLIEGUE.md`](../docs/DESPLIEGUE.md#44-exportar-las-imágenes-a-tar-sin-registro).
 
 ## Verificación sin clúster
 

@@ -459,6 +459,11 @@ Implementa Docker y Kubernetes para PRE y PRO:
   `deploy/docker/.env.<entorno>` y permite publicar en un registro con `-Registro`. Documenta también
   los comandos `docker build` directos, el contexto en la raíz del repositorio, cuándo reconstruir
   cada imagen y los problemas frecuentes.
+- `deploy/docker/exportar.ps1`: exporta las imágenes construidas a `.tar` con `docker save` y genera
+  `SHA256SUMS.txt` para verificar la copia antes de cargarla en cada nodo. Documenta la carga con
+  Docker, containerd (`ctr -n k8s.io`), k3s, kind y minikube, el uso de `IfNotPresent`, el cambio de
+  etiqueta para actualizar y la construcción con `--platform linux/amd64`. Los `.tar` se generan en
+  `deploy/docker/imagenes/`, excluido de Git.
 - `deploy/k8s/base`: ConfigMap, PVC, Deployments, Services e Ingress comunes.
 - `deploy/k8s/overlays/pre`: namespace `pruebasopencode1-pre`, perfil `pre`, host y TLS de PRE.
 - `deploy/k8s/overlays/pro`: namespace `pruebasopencode1-pro`, perfil `prod`, 2 réplicas de frontend,

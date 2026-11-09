@@ -150,6 +150,14 @@
 - [x] Verificar la persistencia de H2 tras reiniciar el backend en ambos entornos.
 - [x] Actualizar la documentación y regenerar la página `/documentacion`.
 
+### Fase 14. Exportación de imágenes a `.tar` para Kubernetes
+
+- [x] Añadir `deploy/docker/exportar.ps1` para generar un `.tar` por imagen y `SHA256SUMS.txt`.
+- [x] Excluir `deploy/docker/imagenes/` de Git.
+- [x] Verificar la exportación: `docker save`, hash SHA-256 coincidente y `docker load` correcto.
+- [x] Documentar la carga en Docker, containerd, k3s, kind y minikube, el caso multi-nodo, la arquitectura y el cambio de etiqueta.
+- [x] Actualizar `DESPLIEGUE.md`, `deploy/README.md`, `EJECUCION.md`, `README.md`, `PROMPT.md` y regenerar la documentación viva.
+
 ## 2. Resultados de verificación (2026-11-09)
 
 | Comprobación | Comando | Resultado |
@@ -163,6 +171,7 @@
 | Documentación viva | `npm run build` + Chrome headless sobre Vite | **Correcta** · secciones, tablas de resultados y consola sin errores |
 | Verificación de despliegue | `node scripts\verificar-despliegue.mjs` | **43/43 comprobaciones** |
 | Imágenes Docker | `back:pre`, `front:pre`, `back:pro`, `front:pro` | **4/4 construidas** correctamente |
+| Exportación `.tar` | `powershell -ExecutionPolicy Bypass -File .\deploy\docker\exportar.ps1 -Entorno pre` | **2/2 imágenes** exportadas · hash SHA-256 verificado y `docker load` correcto |
 | Compose PRE | `.\deploy\docker\levantar.ps1 -Entorno pre` | **2/2 contenedores `healthy`** · SPA, API, login, CRUD, `401` y persistencia H2 |
 | Compose PRO | `.\deploy\docker\levantar.ps1 -Entorno pro` | **2/2 contenedores `healthy`** · perfil `prod`, TTL 299 s y CRUD |
 | Kustomize PRE/PRO | `kubectl kustomize deploy/k8s/overlays/<entorno>` | **Renderizado correcto** · namespaces, perfiles e imágenes |

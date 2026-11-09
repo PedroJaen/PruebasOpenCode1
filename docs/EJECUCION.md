@@ -384,6 +384,34 @@ El contexto siempre es `.` (raíz del repositorio). Para PRO se repiten los coma
 valores de `.env.pro`. La guía completa, la publicación en un registro y los problemas frecuentes
 están en [`DESPLIEGUE.md`](DESPLIEGUE.md#43-construcción-de-las-imágenes).
 
+#### Exportar las imágenes a `.tar` para Kubernetes
+
+Si el clúster no tiene acceso a un registro, exportar las imágenes y cargarlas en cada nodo:
+
+```powershell
+# Genera los .tar y SHA256SUMS.txt en deploy/docker/imagenes/ (excluido de Git)
+powershell -ExecutionPolicy Bypass -File .\deploy\docker\exportar.ps1 -Entorno pre
+
+# Equivalente directo
+docker save -o pruebasopencode1-back-pre.tar pruebasopencode1-back:pre
+docker save -o pruebasopencode1-front-pre.tar pruebasopencode1-front:pre
+```
+
+En el nodo, verificar con `sha256sum -c SHA256SUMS.txt` y cargar en el runtime:
+
+```bash
+docker load -i pruebasopencode1-back-pre.tar                    # Docker
+sudo ctr -n k8s.io images import pruebasopencode1-back-pre.tar  # containerd
+sudo k3s ctr images import pruebasopencode1-back-pre.tar        # k3s
+kind load image-archive pruebasopencode1-back-pre.tar           # kind
+minikube image load pruebasopencode1-back-pre.tar               # minikube
+```
+
+Los manifiestos usan `imagePullPolicy: IfNotPresent`. Para actualizar una versión ya cargada hay que
+usar una etiqueta nueva (`pre-20261109`) y cambiarla en `images.newTag` del overlay; no usar `latest`.
+La guía completa, incluida la arquitectura y el caso multi-nodo, está en
+[`DESPLIEGUE.md`](DESPLIEGUE.md#44-exportar-las-imágenes-a-tar-sin-registro).
+
 ## 5. Variables de entorno
 
 ### 5.1 Backend
