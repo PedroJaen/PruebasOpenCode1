@@ -36,6 +36,7 @@ backend.
 | Backend | Java 21, Spring Boot 3.5.16, Spring Web, Spring Data JPA, Hibernate 6.6, H2 2.3, Spring Security, Maven |
 | Frontend | React 19.3, TypeScript 5.9, Vite 7.3, React Router 7.18 |
 | Pruebas | JUnit 5, Mockito, MockMvc, Spring Security Test, PIT, Node.js, Playwright Core |
+| Despliegue | Docker, Docker Compose, Kubernetes, Kustomize, Nginx |
 | Documentación | Markdown |
 
 ## Estructura
@@ -45,7 +46,8 @@ PruebasOpenCode1/
 ├── back/       API REST en Spring Boot
 ├── front/      SPA en React + TypeScript + Vite
 ├── docs/       Documentación general, prompt de reconstrucción y seguimiento
-├── scripts/    Verificación de integración de la API
+├── deploy/     Dockerfiles, Compose y manifiestos Kustomize PRE/PRO
+├── scripts/    Verificación de integración y de despliegue
 └── AGENTS.md   Reglas del proyecto
 ```
 
@@ -131,6 +133,37 @@ errores en consola. PIT detecta **21/21 mutaciones (100 %)** en el servicio y el
 está en [`docs/SEGUIMIENTO.md`](docs/SEGUIMIENTO.md) y la estrategia de pruebas en
 [`docs/PRUEBAS.md`](docs/PRUEBAS.md).
 
+## Docker y Kubernetes (PRE/PRO)
+
+El proyecto incluye imágenes y manifiestos listos para PRE y PRO:
+
+```powershell
+# Construir imágenes de PRE
+Copy-Item deploy\docker\.env.pre.example deploy\docker\.env.pre
+.\deploy\docker\construir.ps1 -Entorno pre
+
+# Arrancar PRE: front http://localhost:8088 · API directa http://localhost:8081
+.\deploy\docker\levantar.ps1 -Entorno pre -Reconstruir
+
+# PRO: front http://localhost:8098 · API directa http://localhost:8091
+Copy-Item deploy\docker\.env.pro.example deploy\docker\.env.pro
+.\deploy\docker\levantar.ps1 -Entorno pro -Reconstruir
+```
+
+Kubernetes:
+
+```powershell
+kubectl apply -f deploy/k8s/overlays/pre/namespace.yaml
+kubectl -n pruebasopencode1-pre create secret generic pruebasopencode1-secrets `
+  --from-literal=DB_USERNAME=sa --from-literal=DB_PASSWORD='...' `
+  --from-literal=APP_AUTH_USERNAME='...' --from-literal=APP_AUTH_PASSWORD='...'
+kubectl apply -k deploy/k8s/overlays/pre
+```
+
+La validación sin clúster se ejecuta con `node scripts\verificar-despliegue.mjs` (**40/40**). La guía
+completa, las diferencias PRE/PRO y las limitaciones de H2 y de los tokens están en
+[`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md) y [`deploy/README.md`](deploy/README.md).
+
 ## Documentación
 
 - [Prompt de reconstrucción](docs/PROMPT.md): instrucciones completas para recrear la aplicación.
@@ -142,7 +175,7 @@ está en [`docs/SEGUIMIENTO.md`](docs/SEGUIMIENTO.md) y la estrategia de pruebas
 - [Pruebas](docs/PRUEBAS.md): estrategia, suites, mutation testing, comandos y resultados esperados.
 - [Manual de usuario](docs/MANUAL_USUARIO.md): uso de la interfaz, tema y avisos de sesión.
 - [Operación](docs/OPERACION.md): configuración, H2, copias, migración, logs y diagnóstico.
-- [Preparación de despliegues](docs/DESPLIEGUE.md): diseño previsto para Docker, Kubernetes y PRE/PRO.
+- [Despliegue](docs/DESPLIEGUE.md): Docker Compose y Kubernetes con overlays PRE/PRO verificados.
 
 La ruta `/documentacion` del frontend reúne el prompt, estos documentos, `AGENTS.md` y una tabla por
 tipo de prueba. Su contenido se genera con `npm run docs` desde las fuentes reales, por lo que no debe
@@ -169,6 +202,6 @@ defecto y deben inyectarse desde el entorno. El frontend usa `VITE_API_BASE_URL`
 - Las credenciales del autologin son fijas y de demostración (`demo` / `demo1234`); no son aptas para
   producción. El token se guarda solo en memoria y el backend es sin estado. El detalle del modelo
   está en [`docs/SEGURIDAD.md`](docs/SEGURIDAD.md).
-- La estructura y la configuración están preparadas para futuras imágenes Docker y manifiestos de
-  Kubernetes en PRE y PRO, sin implementar todavía el despliegue real. Véase
-  [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md).
+- Las imágenes Docker y los manifiestos de Kubernetes para PRE y PRO están implementados y validados.
+  No se ha desplegado en un clúster real; H2 exige una sola réplica de backend y volumen persistente.
+  Véase [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md).

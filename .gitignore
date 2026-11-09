@@ -14,6 +14,14 @@ front/.env
 front/.env.*
 !front/.env.example
 
+# Despliegue: entornos y secretos locales
+deploy/docker/.env
+deploy/docker/.env.pre
+deploy/docker/.env.pro
+deploy/docker/.env.*.local
+deploy/k8s/**/secrets.env
+deploy/k8s/**/secret.local.yaml
+
 # Herramientas y editores
 .vscode/
 .idea/

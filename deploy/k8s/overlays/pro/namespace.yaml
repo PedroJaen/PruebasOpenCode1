@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pruebasopencode1-pro
+  labels:
+    app.kubernetes.io/part-of: pruebasopencode1
+    entorno: pro

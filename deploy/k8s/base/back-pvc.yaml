@@ -1,0 +1,15 @@
+# H2 en fichero: una sola réplica del backend y volumen persistente.
+# Si el clúster exige una StorageClass concreta, se puede parchear en el overlay.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: back-data
+  labels:
+    app.kubernetes.io/name: pruebasopencode1-back
+    app.kubernetes.io/part-of: pruebasopencode1
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: pruebasopencode1-pro
+
+resources:
+  - namespace.yaml
+  - ../../base
+  - hpa-front.yaml
+  - pdb-front.yaml
+
+images:
+  - name: pruebasopencode1-back
+    newTag: pro
+  - name: pruebasopencode1-front
+    newTag: pro
+
+patches:
+  - path: configmap-patch.yaml
+    target:
+      kind: ConfigMap
+      name: pruebasopencode1-config
+  - path: ingress-patch.yaml
+    target:
+      kind: Ingress
+      name: pruebasopencode1
+  - path: front-replicas-patch.yaml
+    target:
+      kind: Deployment
+      name: front

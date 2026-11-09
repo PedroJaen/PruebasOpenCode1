@@ -1,0 +1,32 @@
+# Contexto de build de Docker para PruebasOpenCode1.
+# Se excluyen secretos, artefactos y dependencias; se conservan las fuentes
+# necesarias para compilar y para regenerar la documentación viva.
+
+.git
+.gitignore
+.dockerignore
+
+# Secretos y configuración local
+**/.env
+**/.env.*
+!**/.env.example
+
+# Backend
+back/target
+back/data
+back/*.log
+
+# Frontend
+front/node_modules
+front/dist
+front/.vite
+
+# Manifiestos: no se necesitan dentro de las imágenes
+deploy/k8s
+
+# Editores y sistema
+.vscode
+.idea
+**/*.iml
+**/.DS_Store
+**/Thumbs.db

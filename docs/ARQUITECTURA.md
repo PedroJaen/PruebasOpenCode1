@@ -53,7 +53,11 @@ PruebasOpenCode1/
 │   ├── SEGUIMIENTO.md
 │   └── SEGURIDAD.md
 ├── scripts/
-│   └── verificar-integracion.mjs
+│   ├── verificar-integracion.mjs
+│   └── verificar-despliegue.mjs
+├── deploy/
+│   ├── docker/          # Dockerfiles, Nginx y Docker Compose
+│   └── k8s/             # Kustomize base + overlays PRE/PRO
 ├── back/
 │   ├── pom.xml
 │   ├── mvnw
@@ -418,7 +422,10 @@ prueba y marca las comprobaciones con el último resultado registrado.
 | Versionado `/api/v1` | Permite evolucionar el contrato sin romper clientes existentes. |
 | CORS configurable por entorno | Permite cambiar orígenes sin recompilar. |
 | Proxy `/api` en Vite | Evita CORS en desarrollo y simplifica la configuración del cliente. |
-| Configuración por perfiles y variables de entorno | Base para Docker/Kubernetes y entornos PRE/PRO. |
+| Configuración por perfiles y variables de entorno | Permite Docker/Kubernetes y entornos PRE/PRO sin tocar código. |
+| Dos imágenes Docker independientes | Backend JRE y frontend Nginx con ciclos de vida y escalado separados. |
+| Kustomize base + overlays PRE/PRO | Evita duplicar manifiestos y hace explícitas las diferencias de entorno. |
+| H2 sobre PVC y una réplica de backend | H2 en fichero no admite concurrencia de varias instancias; se documenta la limitación. |
 | Seguridad con tokens Bearer opacos | Autenticación real sin estado, revocación explícita y sin dependencia JWT. |
 | Token en memoria del frontend | No se persiste en el navegador; recargar provoca un nuevo autologin transparente. |
 | Contraseña con BCrypt en H2 | Demuestra un almacenamiento realista de credenciales y evita guardar texto plano. |
@@ -428,7 +435,7 @@ prueba y marca las comprobaciones con el último resultado registrado.
 | CSRF desactivado en la demo | No hay cookies de autenticación; se documenta y se revisará si cambia el modelo. |
 | CSS propio con tema oscuro | Interfaz ligera, moderna y sin dependencias innecesarias. |
 | `ErrorBoundary` en React | Evita que un error de renderizado deje la aplicación en blanco. |
-| Actuator con sondas de salud | Prepara el backend para futuras comprobaciones de Kubernetes. |
+| Actuator con sondas de salud | Alimenta las sondas de Kubernetes y la monitorización. |
 
 ## 6. Calidad y pruebas
 
@@ -445,20 +452,25 @@ prueba y marca las comprobaciones con el último resultado registrado.
   mínimo del 90 %. Es opcional y se ejecuta fuera de `clean verify`.
 - **Documentación**: la página `/documentacion` se regenera con `npm run docs` y se valida con el
   build de tipos. Una verificación funcional comprueba sus secciones, pestañas, tablas y consola.
+- **Despliegue**: `scripts/verificar-despliegue.mjs` valida Dockerfiles, Nginx, Compose PRE/PRO y los
+  overlays Kustomize (**40 comprobaciones**, sin clúster).
 
 La estrategia detallada está en [`PRUEBAS.md`](PRUEBAS.md) y los resultados se registran en
 [`SEGUIMIENTO.md`](SEGUIMIENTO.md).
 
-## 7. Preparación para despliegues
+## 7. Docker y Kubernetes
 
-La aplicación está diseñada para evolucionar a Docker y Kubernetes sin cambiar el código:
+La aplicación se puede ejecutar en Docker y Kubernetes sin cambiar el código:
 
-- Backend sin estado en aplicación (la persistencia está aislada en la base de datos y los tokens se
-  pueden compartir o sustituir por JWT en un despliegue con varias réplicas).
-- Configuración externalizada por perfiles y variables de entorno; secretos fuera del repositorio.
-- Endpoints de salud de Actuator para sondas.
-- Frontend compilado como estáticos y con URL de API configurable.
-- Separación `/back` y `/front` que permite imágenes independientes.
+- **Imágenes**: `deploy/docker/back.Dockerfile` (Maven + JRE 21 sin root) y
+  `deploy/docker/front.Dockerfile` (Node + Nginx sin privilegios).
+- **Compose**: `deploy/docker/docker-compose.yml` con un proyecto, red, volumen y puertos por entorno.
+- **Kubernetes**: base común en `deploy/k8s/base` y overlays `pre`/`pro` con namespace, perfil,
+  ConfigMap, Ingress, TLS y recursos de escalado.
+- **Configuración**: el perfil, la base de datos, CORS y los secretos se inyectan por entorno; la
+  imagen del backend es la misma en PRE y PRO.
+- **Salud**: Actuator expone `liveness` y `readiness`; Nginx expone `/healthz`.
+- **Persistencia**: H2 sobre un PVC, una sola réplica de backend y estrategia `Recreate`.
 
-El plan detallado, incluidos PRE y PRO, está en `docs/DESPLIEGUE.md`. En esta fase no se implementan
-despliegues reales, tal y como exige el alcance del proyecto.
+El procedimiento completo está en [`DESPLIEGUE.md`](DESPLIEGUE.md) y en `deploy/README.md`. No se ha
+desplegado en un clúster real porque el entorno de verificación no tenía contexto de Kubernetes.

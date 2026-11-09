@@ -43,7 +43,7 @@ const descripciones = {
   'PRUEBAS.md': 'Estrategia de pruebas, alcance de cada suite y resultados esperados.',
   'MANUAL_USUARIO.md': 'Guía paso a paso para usar la interfaz.',
   'OPERACION.md': 'Configuración, base de datos H2, copias y diagnóstico.',
-  'DESPLIEGUE.md': 'Diseño previsto para Docker, Kubernetes y entornos PRE/PRO.',
+  'DESPLIEGUE.md': 'Docker Compose y Kubernetes con overlays PRE/PRO verificados.',
   'SEGUIMIENTO.md': 'Fases, tareas, resultados, incidencias y próximos pasos.',
 }
 
@@ -122,6 +122,18 @@ function leerSurefire() {
   }
 
   return resultados
+}
+
+function leerVerificacionDespliegue() {
+  const ruta = join(raiz, 'deploy', 'verificacion-despliegue.json')
+  if (!existsSync(ruta)) {
+    return null
+  }
+  try {
+    return JSON.parse(readFileSync(ruta, 'utf8'))
+  } catch {
+    return null
+  }
 }
 
 function parsearPasos(ruta) {
@@ -318,6 +330,7 @@ const ui = parsearPasos('front/scripts/verificar-ui.mjs').map((paso) => ({
 }))
 
 const pit = parsearPit()
+const despliegue = leerVerificacionDespliegue()
 const coberturaLineas = pit?.cobertura
   ? `${pit.cobertura.lineas.cubiertas}/${pit.cobertura.lineas.total} (${pit.cobertura.lineas.porcentaje} %)`
   : '96 % (48/50)'
@@ -406,6 +419,21 @@ const backend = [
       ['Comprobación de tipos', 'tsc --noEmit', 'Superada'],
       ['Build de producción', 'vite build', 'Superada'],
     ],
+  },
+  {
+    id: 'despliegue',
+    titulo: 'Verificación de despliegue Docker y Kubernetes',
+    descripcion:
+      'Dockerfiles, Nginx, Docker Compose y overlays Kustomize de PRE y PRO, sin necesidad de clúster.',
+    comando: 'front\\npm run test:deploy',
+    fecha: despliegue?.fecha ?? fecha,
+    resumen: despliegue
+      ? `${despliegue.superadas}/${despliegue.total} comprobaciones superadas`
+      : 'Sin informe. Ejecuta el comando para generar el desglose.',
+    columnas: ['Comprobación', 'Resultado'],
+    filas: despliegue
+      ? despliegue.comprobaciones.map((c) => [c.nombre, c.resultado])
+      : [['Informe de despliegue no generado', 'Sin datos']],
   },
 ]
 

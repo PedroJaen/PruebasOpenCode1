@@ -13,6 +13,8 @@
 | Eclipse | 2024-06 o superior, con soporte Java 21 | — |
 | Visual Studio Code | Cualquier versión reciente | — |
 | Chrome o Edge | Para la prueba automática de interfaz | — |
+| Docker Desktop / Docker Engine | 28 o superior, con Compose v2 | `docker --version` |
+| kubectl | 1.32 o superior (incluye Kustomize) | `kubectl version --client` |
 
 > En el entorno de verificación se utilizó Temurin JDK 21.0.13 y Maven 3.9.16 (gestionado por el
 > wrapper). El proyecto no depende de esas rutas concretas.
@@ -217,6 +219,48 @@ Genera `src/content/documentacion.generated.ts` desde las fuentes reales:
 El hook `prebuild` también lo ejecuta, de modo que la página `/documentacion` del build siempre refleja
 el estado actual. El archivo generado no debe editarse a mano.
 
+### 3.5 Docker Compose y Kubernetes
+
+La guía completa está en [`DESPLIEGUE.md`](DESPLIEGUE.md) y en `deploy/README.md`.
+
+```powershell
+# Construir imágenes de PRE
+Copy-Item deploy\docker\.env.pre.example deploy\docker\.env.pre
+.\deploy\docker\construir.ps1 -Entorno pre
+
+# Arrancar PRE (front 8088, API directa 8081)
+.\deploy\docker\levantar.ps1 -Entorno pre -Reconstruir
+
+# Detener
+.\deploy\docker\parar.ps1 -Entorno pre
+```
+
+Para PRO se usa `.env.pro` y los puertos 8098/8091. Ambos entornos pueden ejecutarse a la vez.
+
+> Si PowerShell bloquea los scripts (política de ejecución), se pueden lanzar con
+> `powershell -ExecutionPolicy Bypass -File .\deploy\docker\levantar.ps1 -Entorno pre` o ejecutar
+> directamente `docker compose --env-file deploy\docker\.env.pre -f deploy\docker\docker-compose.yml up -d`.
+
+Kubernetes:
+
+```powershell
+kubectl apply -f deploy/k8s/overlays/pre/namespace.yaml
+kubectl -n pruebasopencode1-pre create secret generic pruebasopencode1-secrets `
+  --from-literal=DB_USERNAME=sa `
+  --from-literal=DB_PASSWORD='...' `
+  --from-literal=APP_AUTH_USERNAME='...' `
+  --from-literal=APP_AUTH_PASSWORD='...'
+kubectl apply -k deploy/k8s/overlays/pre
+kubectl -n pruebasopencode1-pre rollout status deployment/back
+```
+
+Antes de aplicar en un clúster real hay que publicar las imágenes en un registro, ajustar el
+`Ingress`, el TLS y la `StorageClass`. La verificación sin clúster se ejecuta con:
+
+```powershell
+node scripts\verificar-despliegue.mjs
+```
+
 ## 4. Pruebas y verificación
 
 La estrategia completa, el alcance de cada suite y los resultados esperados están en
@@ -293,6 +337,16 @@ Analiza `PersonaServiceImpl` y `PersonaMapper` con las pruebas unitarias del ser
 esperado es `BUILD SUCCESS` con **21/21 mutaciones detectadas**. El informe HTML queda en
 `back/target/pit-reports/index.html`. La configuración y los umbrales del 90 % están en `pom.xml`.
 Incluir `test-compile` evita analizar clases de prueba obsoletas.
+
+### 4.6 Despliegue
+
+```powershell
+node scripts\verificar-despliegue.mjs
+```
+
+Valida los Dockerfiles, Nginx, Docker Compose PRE/PRO y los overlays Kustomize. No necesita el motor
+de Docker arrancado ni un clúster. El resultado esperado es **40/40 comprobaciones** y el informe
+`deploy/verificacion-despliegue.json`.
 
 ## 5. Variables de entorno
 

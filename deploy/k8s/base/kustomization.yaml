@@ -1,0 +1,19 @@
+# Manifiestos base de Kubernetes para PruebasOpenCode1.
+# No se aplican directamente: usar los overlays de deploy/k8s/overlays/{pre,pro}.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - configmap.yaml
+  - back-pvc.yaml
+  - back-deployment.yaml
+  - back-service.yaml
+  - front-deployment.yaml
+  - front-service.yaml
+  - ingress.yaml
+
+images:
+  - name: pruebasopencode1-back
+    newTag: pre
+  - name: pruebasopencode1-front
+    newTag: pre

@@ -12,6 +12,8 @@
 | Backend Spring Boot | `8080` | API REST `/api/v1`, Actuator, Swagger UI y consola H2. |
 | Frontend Vite | `5173` | SPA en desarrollo con proxy `/api` hacia el backend. |
 | Frontend compilado | `4173` | Servidor de previsualización de `dist/`; no incluye proxy. |
+| Docker PRE | `8088` (front) / `8081` (API) | Nginx + backend con perfil `pre`. |
+| Docker PRO | `8098` (front) / `8091` (API) | Nginx + backend con perfil `prod`. |
 | H2 | — | Base de datos en fichero, usada por el backend. |
 
 En desarrollo, el navegador habla con Vite y Vite redirige las peticiones `/api/**` al backend. El
@@ -86,7 +88,23 @@ están en [`EJECUCION.md`](EJECUCION.md).
 Para detener los procesos, usar `Ctrl+C` en cada terminal o el botón de parada del IDE. Antes de
 copiar o restaurar la base de datos, detener siempre el backend.
 
-### 3.2 Comprobaciones tras el arranque
+### 3.2 Docker Compose
+
+```powershell
+Copy-Item deploy\docker\.env.pre.example deploy\docker\.env.pre
+.\deploy\docker\levantar.ps1 -Entorno pre -Reconstruir
+.\deploy\docker\parar.ps1 -Entorno pre
+```
+
+- PRE publica el frontend en `8088` y la API en `8081`.
+- PRO publica el frontend en `8098` y la API en `8091`.
+- Cada entorno usa su propio proyecto Compose, red y volumen H2.
+- Los datos se guardan en `pruebasopencode1-back-data-<entorno>`.
+- `parar.ps1 -EliminarDatos` elimina también el volumen.
+
+La guía completa está en [`DESPLIEGUE.md`](DESPLIEGUE.md).
+
+### 3.3 Comprobaciones tras el arranque
 
 ```powershell
 # Salud del backend (público)
@@ -246,7 +264,8 @@ Antes de dar por buena una instalación local:
 - La API usa tokens Bearer opacos de corta duración; el backend es sin estado.
 - Las credenciales del autologin son fijas y de demostración; no son secretos reales.
 - En `pre` y `prod` los secretos (`DB_*`, `APP_AUTH_*`, `CORS_ALLOWED_ORIGINS`) deben inyectarse desde
-  el entorno; no tienen valor por defecto.
+  el entorno; no tienen valor por defecto. En Docker se leen de `.env.<entorno>`; en Kubernetes, del
+  `Secret pruebasopencode1-secrets`.
 - La consola H2 y Swagger están desactivados fuera de desarrollo: `H2_CONSOLE_ENABLED=false` y
   `SPRINGDOC_ENABLED=false` en `pre`/`prod`.
 - No exponer el puerto de H2 ni el fichero `.mv.db`.
@@ -257,20 +276,26 @@ Antes de dar por buena una instalación local:
 - Antes de un despliegue real, añadir autenticación individual, TLS, gestión de secretos, una base de
   datos adecuada y revisar CSRF si se introducen cookies.
 
-## 10. Preparación para PRE y PRO
+## 10. Ejecución y despliegue en PRE y PRO
 
-La configuración está externalizada para no modificar el código al cambiar de entorno. Antes de
-desplegar:
+La configuración está externalizada para no modificar el código al cambiar de entorno. La
+contenerización y los manifiestos están implementados:
 
-1. Definir las variables de entorno de cada entorno (incluidos los secretos).
-2. Decidir la base de datos: H2 con volumen persistente o una base externa.
-3. Definir cómo se comparten los tokens si hay varias réplicas (almacén compartido o JWT).
-4. Configurar copias de seguridad y retención.
-5. Añadir TLS y una revisión de seguridad.
-6. Sustituir la migración ligera por Flyway o Liquibase.
-7. Revisar sondas, recursos, réplicas y límites en Kubernetes.
+1. **Docker Compose**: `deploy/docker/.env.pre` y `.env.pro` definen perfil, base de datos, CORS y
+   secretos. `levantar.ps1` y `parar.ps1` gestionan cada entorno por separado.
+2. **Kubernetes**: `deploy/k8s/overlays/pre` y `pro` aplican namespace, perfil, réplicas, Ingress y
+   TLS sobre una base común. Los secretos se crean con `kubectl create secret`.
+3. **H2**: volumen persistente y una sola réplica de backend con estrategia `Recreate`. Para escalar
+   el backend hace falta una base externa y migraciones formales.
+4. **Tokens**: viven en memoria del backend; el frontend puede escalar, el backend no sin un almacén
+   compartido o JWT.
+5. **Salud**: Actuator expone `liveness`/`readiness`; Nginx expone `/healthz`.
+6. **Verificación**: `node scripts\verificar-despliegue.mjs` valida Dockerfiles, Compose y Kustomize
+   sin clúster (**40/40**).
 
-El diseño previsto se detalla en [`DESPLIEGUE.md`](DESPLIEGUE.md).
+Antes de una implantación real: publicar las imágenes en un registro, sustituir hosts y certificados,
+crear secretos reales, configurar copias de seguridad y sustituir el autologin por autenticación
+individual. El procedimiento y las limitaciones se detallan en [`DESPLIEGUE.md`](DESPLIEGUE.md).
 
 ## 11. Mantenimiento
 

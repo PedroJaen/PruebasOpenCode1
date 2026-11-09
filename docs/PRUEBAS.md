@@ -21,6 +21,7 @@ a las pruebas de carga o seguridad de un entorno real.
 | Integración de extremo a extremo | Node.js + `fetch` a través del proxy de Vite | 18 comprobaciones | Flujo real frontend → proxy → autologin → API → H2 → auditoría. |
 | Interfaz con navegador | Playwright Core + Chrome/Edge del sistema | 14 comprobaciones | Pantallas, autologin transparente, formularios, confirmaciones, notificaciones, tema oscuro y consola del navegador. |
 | Mutación de backend | PIT 1.30.2 + JUnit 5 | 21 mutaciones | Servicio y mapper: CRUD, cálculo de edad, limpieza de datos y actualización. |
+| Despliegue | Docker, Docker Compose y Kustomize | 40 comprobaciones | Dockerfiles, Nginx, Compose PRE/PRO y overlays Kubernetes, sin clúster. |
 | Migración de esquema | Verificación manual con H2 antigua | — | Retirada de la columna heredada `edad` y funcionamiento posterior del CRUD. |
 
 Total de pruebas de backend en `clean verify`: **34** (11 unitarias + 14 de integración de personas +
@@ -32,6 +33,8 @@ Total de pruebas de backend en `clean verify`: **34** (11 unitarias + 14 de inte
 - Node.js 20.19+ (probado con Node 24).
 - Backend y frontend arrancados para las suites de integración y de interfaz.
 - Chrome o Edge instalado para `npm run test:ui`.
+- Docker CLI y Compose v2 para validar la configuración de despliegue.
+- kubectl 1.32+ (con Kustomize) para renderizar los overlays; no hace falta un clúster.
 
 En PowerShell, si `npm.ps1` está bloqueado, usar `npm.cmd`.
 
@@ -116,6 +119,27 @@ compiladas y puede analizar una versión antigua de los tests.
 El informe HTML queda en `back/target/pit-reports/index.html` y el XML en
 `back/target/pit-reports/mutations.xml`. La configuración está en `back/pom.xml` y aplica estos
 umbrales: **90 % de mutaciones detectadas** y **90 % de cobertura de líneas** de las clases mutadas.
+
+### 4.6 Despliegue
+
+```powershell
+cd D:\PruebasOpenCode1
+node scripts\verificar-despliegue.mjs
+```
+
+Valida sin clúster:
+
+- Existencia de Dockerfiles, Nginx, Compose y overlays.
+- Backend multi-stage, JRE 21 y usuario no root.
+- Frontend multi-stage, Nginx sin privilegios y build de Vite.
+- Fallback de SPA, proxy `/api` y `/healthz` de Nginx.
+- Exclusiones de `.dockerignore` (secretos, dependencias y artefactos).
+- `docker compose config` para PRE y PRO.
+- Renderizado Kustomize de ambos overlays, perfiles, imágenes, PVC, Ingress, HPA y PDB.
+- Ausencia de secretos reales entre los recursos renderizados.
+
+Genera `deploy/verificacion-despliegue.json`, que alimenta la tabla de despliegue de
+`/documentacion`.
 
 ## 5. Qué cubre cada suite
 
@@ -236,7 +260,8 @@ servida por Vite. La comprobación cubre:
 2. Existen las secciones de resumen, prompt, documentación, `AGENTS.md` y resultados.
 3. El prompt se renderiza como Markdown y `AGENTS.md` conserva sus reglas.
 4. Las 10 pestañas de documentación cambian de documento.
-5. Hay 6 tablas de resultados (unitarias, integración backend, E2E, interfaz, mutación y frontend).
+5. Hay 7 tablas de resultados (unitarias, integración backend, E2E, interfaz, mutación, frontend y
+   despliegue).
 6. El botón de copiar prompt responde y el índice lateral navega.
 7. Los enlaces internos entre documentos son interactivos.
 8. La consola del navegador no contiene errores.
@@ -246,6 +271,21 @@ los tokens Bearer y el almacenamiento cifrado de credenciales.
 
 La comprobación más reciente (2026-11-09) se ejecutó con Chrome headless después de `npm run build`:
 confirmó las secciones de resultados, las tablas generadas y la ausencia de errores en consola.
+
+### 5.8 Verificación de despliegue
+
+La suite de despliegue comprueba la preparación para PRE y PRO sin necesidad de un clúster:
+
+1. Los Dockerfiles, Nginx, Compose y overlays existen en las rutas esperadas.
+2. El backend usa multi-stage, JRE 21 y un usuario sin privilegios.
+3. El frontend usa multi-stage, Nginx sin privilegios y `npm run build`.
+4. Nginx aplica fallback de SPA, proxy `/api` y sonda `/healthz`.
+5. `.dockerignore` excluye secretos, dependencias, builds y datos H2.
+6. `docker compose config` es válido para PRE y PRO.
+7. Kustomize renderiza los namespaces, ConfigMaps, Deployments, Services, PVC e Ingress.
+8. PRE usa perfil `pre` y PRO `prod`, con imágenes `:pre` y `:pro`.
+9. PRO incluye HPA y PDB; el backend mantiene una réplica y `Recreate`.
+10. Los overlays no incluyen secretos reales.
 
 ## 6. Datos de prueba
 
@@ -270,7 +310,9 @@ Resultados de la última verificación funcional (2026-11-09):
 | `verificar-integracion.mjs` | **18/18 comprobaciones** |
 | `verificar-ui.mjs` | **14/14 comprobaciones**, sin errores de consola |
 | `pitest:mutationCoverage` | **BUILD SUCCESS** · 21/21 mutaciones, 100 % de detección y 48/50 (96 %) de cobertura |
-| Página `/documentacion` | Correcta · 5 secciones, 10 documentos, 6 tablas y consola sin errores |
+| `verificar-despliegue.mjs` | **40/40 comprobaciones** |
+| Docker Compose PRE y PRO | 4 imágenes construidas; contenedores `healthy`, login, CRUD, `401` y persistencia H2 |
+| Página `/documentacion` | Correcta · 5 secciones, 10 documentos, 7 tablas y consola sin errores |
 | Migración de esquema heredado | Columna `edad` eliminada; CRUD y edades correctos |
 
 ## 8. Cómo añadir pruebas

@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pruebasopencode1-config
+  labels:
+    app.kubernetes.io/name: pruebasopencode1
+    app.kubernetes.io/part-of: pruebasopencode1
+data:
+  # Valores comunes; cada overlay cambia perfil, CORS, TTL y nivel de log.
+  SPRING_PROFILES_ACTIVE: pre
+  SERVER_PORT: "8080"
+  DB_URL: jdbc:h2:file:/app/data/pruebasopencode1
+  JPA_DDL_AUTO: update
+  H2_CONSOLE_ENABLED: "false"
+  SPRINGDOC_ENABLED: "false"
+  SEED_MOCK_DATA: "false"
+  APP_AUTH_ROLE: USER
+  APP_AUTH_TOKEN_TTL: 10m
+  LOG_LEVEL: INFO

@@ -1,326 +1,361 @@
-# Preparación de despliegues de PruebasOpenCode1
+# Despliegue de PruebasOpenCode1 en Docker y Kubernetes
 
 > Documento actualizado el 2026-11-09.
 >
-> **Alcance actual:** este documento describe el diseño previsto. No se han implementado ni
-> simulado despliegues reales en PRE o PRO, tal y como establece `AGENTS.md`.
+> **Estado:** contenerización y manifiestos **implementados y verificados** para PRE y PRO. No se ha
+> realizado un despliegue real en un clúster: no había contexto de Kubernetes configurado. Las
+> imágenes se han construido y probado con Docker Compose, y los overlays se han renderizado con
+> Kustomize.
 
 ## 1. Objetivo
 
-Dejar preparada la aplicación para una futura contenerización y despliegue en Kubernetes en dos
-entornos:
+Permitir que PruebasOpenCode1 se ejecute en dos entornos sin modificar el código fuente:
 
-- **PRE**: preproducción, con datos y configuración de pruebas.
+- **PRE**: preproducción, con configuración y datos de prueba.
 - **PRO**: producción.
 
-La prioridad es que el paso a esos entornos no obligue a modificar el código fuente.
+La aplicación mantiene las tecnologías obligatorias del proyecto: Java 21, Spring Boot, H2, React,
+TypeScript y Vite. El cambio de entorno se resuelve con variables de entorno, perfiles de Spring y
+overlays de Kustomize.
 
-## 2. Principios ya aplicados
-
-| Principio | Aplicación en PruebasOpenCode1 |
-| --- | --- |
-| Configuración externalizada | Backend por variables de entorno (`DB_URL`, `CORS_ALLOWED_ORIGINS`, `SERVER_PORT`, `APP_AUTH_TOKEN_TTL`, etc.). |
-| Perfiles por entorno | `dev`, `test`, `pre` y `prod` en `application-<perfil>.yml`; `dev` por defecto. |
-| Frontend configurable | `VITE_API_BASE_URL` en tiempo de compilación, por defecto `/api/v1`. |
-| Separación de aplicaciones | Directorios independientes `/back` y `/front`, con builds propios. |
-| Salud observable | Spring Boot Actuator con `health`, `liveness` y `readiness`. |
-| Sin secretos en el repositorio | `back/.env.example` documenta las variables; los `.env` reales están excluidos. En `pre`/`prod` los secretos no tienen valor por defecto. |
-| API versionada | Todas las rutas de negocio bajo `/api/v1`. |
-| Errores estándar | RFC 9457 (`application/problem+json`) en todos los entornos. |
-| Persistencia aislada | El acceso a datos está encapsulado en el repositorio JPA. |
-| Imágenes reproducibles | Versiones fijadas en `pom.xml`, `package-lock.json` y Maven Wrapper. |
-| Aplicación frontend estática | El build de Vite genera recursos que puede servir cualquier servidor web. |
-
-## 3. Arquitectura objetivo
+## 2. Arquitectura desplegada
 
 ```text
                          ┌──────────────────────────────┐
         Internet  ─────▶ │  Ingress / Load Balancer     │
-                         │  pre.pruebasopencode1.local  │
-                         │  pro.pruebasopencode1.local  │
+                         │  pre.pruebasopencode1...     │
+                         │  pruebasopencode1...         │
                          └──────────────┬───────────────┘
                                         │
-                     ┌──────────────────┴──────────────────┐
-                     │                                     │
-          ┌──────────▼──────────┐              ┌───────────▼──────────┐
-          │  front (Nginx)      │              │  back (Spring Boot)  │
-          │  estáticos React    │── /api/v1 ──▶│  API REST :8080      │
-          └─────────────────────┘              └───────────┬──────────┘
-                                                           │ JDBC
-                                                           ▼
-                                                  ┌──────────────────┐
-                                                  │  Base de datos   │
-                                                  │  PRE / PRO       │
-                                                  └──────────────────┘
+                         ┌──────────────▼───────────────┐
+                         │  front (Nginx sin root)      │
+                         │  SPA + proxy /api → back     │
+                         └──────────────┬───────────────┘
+                                        │ HTTP interno
+                         ┌──────────────▼───────────────┐
+                         │  back (Spring Boot :8080)    │
+                         │  1 réplica + Recreate        │
+                         └──────────────┬───────────────┘
+                                        │ JDBC
+                         ┌──────────────▼───────────────┐
+                         │  H2 en volumen persistente   │
+                         │  PVC ReadWriteOnce           │
+                         └──────────────────────────────┘
 ```
 
-Dos imágenes independientes:
+Decisiones clave:
 
-1. **Frontend**: build de Vite servido por Nginx, con proxy `/api` hacia el backend o con
-   `VITE_API_BASE_URL` apuntando al Ingress de la API.
-2. **Backend**: JAR de Spring Boot ejecutado con una JRE 21.
+| Decisión | Motivo |
+| --- | --- |
+| Dos imágenes independientes | Backend y frontend tienen ciclos de vida y escalado distintos. |
+| Nginx sirve la SPA y proxifica `/api` | La API y la interfaz comparten origen; se evita CORS en el navegador. |
+| Backend sin root (UID 10001) | Reduce privilegios dentro del contenedor. |
+| Nginx `nginx-unprivileged` en el puerto 8080 | No necesita root ni capacidades para escuchar en un puerto privilegiado. |
+| Configuración en tiempo de ejecución | La misma imagen de backend sirve para PRE y PRO. |
+| H2 con PVC y una réplica | H2 en fichero no admite escrituras concurrentes de varias instancias. |
+| Kustomize base + overlays | Evita duplicar manifiestos y hace explícitas las diferencias PRE/PRO. |
 
-## 4. Estructura futura propuesta
-
-No creada todavía; se incluye como guía para la siguiente fase:
+## 3. Estructura
 
 ```text
 deploy/
+├── README.md
 ├── docker/
-│   ├── back.Dockerfile          # multi-stage: Maven + JDK 21 → JRE 21
-│   ├── front.Dockerfile         # multi-stage: Node + Vite → Nginx
-│   └── nginx.conf
-├── k8s/
-│   ├── base/
-│   │   ├── namespace.yaml
-│   │   ├── back-deployment.yaml
-│   │   ├── back-service.yaml
-│   │   ├── front-deployment.yaml
-│   │   ├── front-service.yaml
-│   │   ├── ingress.yaml
-│   │   ├── configmap.yaml
-│   │   └── secret.example.yaml
-│   └── overlays/
-│       ├── pre/
-│       │   ├── kustomization.yaml
-│       │   ├── configmap-patch.yaml
-│       │   └── replicas-patch.yaml
-│       └── pro/
-│           ├── kustomization.yaml
-│           ├── configmap-patch.yaml
-│           └── replicas-patch.yaml
-└── README.md
+│   ├── back.Dockerfile
+│   ├── front.Dockerfile
+│   ├── nginx.conf
+│   ├── docker-compose.yml
+│   ├── .env.pre.example
+│   ├── .env.pro.example
+│   ├── construir.ps1
+│   ├── levantar.ps1
+│   └── parar.ps1
+└── k8s/
+    ├── base/
+    │   ├── kustomization.yaml
+    │   ├── configmap.yaml
+    │   ├── back-pvc.yaml
+    │   ├── back-deployment.yaml
+    │   ├── back-service.yaml
+    │   ├── front-deployment.yaml
+    │   ├── front-service.yaml
+    │   └── ingress.yaml
+    └── overlays/
+        ├── pre/
+        │   ├── kustomization.yaml
+        │   ├── namespace.yaml
+        │   ├── configmap-patch.yaml
+        │   ├── ingress-patch.yaml
+        │   └── secret.example.yaml
+        └── pro/
+            ├── kustomization.yaml
+            ├── namespace.yaml
+            ├── configmap-patch.yaml
+            ├── ingress-patch.yaml
+            ├── front-replicas-patch.yaml
+            ├── hpa-front.yaml
+            ├── pdb-front.yaml
+            └── secret.example.yaml
 ```
 
-Se propone **Kustomize** para compartir la base y aplicar diferencias por entorno sin duplicar
-manifiestos.
+La raíz incorpora `.dockerignore`, que excluye `.git`, dependencias, builds, datos H2 y ficheros
+`.env`.
 
-## 5. Imágenes previstas
+## 4. Imágenes Docker
 
-### 5.1 Backend
+### 4.1 Backend
 
-```dockerfile
-# Borrador conceptual, no implementado.
-FROM eclipse-temurin:21-jdk AS build
-WORKDIR /app
-COPY .mvn .mvn
-COPY mvnw pom.xml ./
-RUN ./mvnw -B dependency:go-offline
-COPY src src
-RUN ./mvnw -B clean package -DskipTests
+`deploy/docker/back.Dockerfile` usa dos etapas:
 
-FROM eclipse-temurin:21-jre
-WORKDIR /app
-COPY --from=build /app/target/pruebasopencode1-back.jar app.jar
-EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+1. `maven:3.9.11-eclipse-temurin-21` compila con Maven Wrapper y genera
+   `target/pruebasopencode1-back.jar` sin ejecutar pruebas.
+2. `eclipse-temurin:21-jre-alpine` ejecuta el JAR con un usuario `app` (UID/GID 10001).
+
+Características:
+
+- `JAVA_OPTS` con `-XX:MaxRAMPercentage=75` y salida ante `OutOfMemoryError`.
+- Directorio `/app/data` preparado para el volumen H2.
+- Sin secretos ni ficheros de entorno en la imagen.
+- `SPRING_PROFILES_ACTIVE` se define en el orquestador.
+
+### 4.2 Frontend
+
+`deploy/docker/front.Dockerfile` usa dos etapas:
+
+1. `node:24-alpine` ejecuta `npm ci` y `npm run build`. El contexto incluye `AGENTS.md`, `docs/`,
+   `scripts/` y los tests de Java porque `npm run build` regenera la documentación viva.
+2. `nginxinc/nginx-unprivileged:1.27-alpine` sirve `dist/` en el puerto 8080.
+
+`nginx.conf` incluye:
+
+- Fallback de SPA: `try_files $uri $uri/ /index.html`.
+- Proxy `/api/` a `http://back:8080`.
+- `/healthz` para sondas.
+- Cabeceras de seguridad, caché de assets con hash y `no-cache` para `index.html`.
+
+### 4.3 Construcción
+
+```powershell
+Copy-Item deploy\docker\.env.pre.example deploy\docker\.env.pre
+.\deploy\docker\construir.ps1 -Entorno pre
+
+Copy-Item deploy\docker\.env.pro.example deploy\docker\.env.pro
+.\deploy\docker\construir.ps1 -Entorno pro
 ```
 
-Consideraciones:
+Con registro:
 
-- Ejecutar con usuario no root.
-- Añadir `JAVA_OPTS` para límites de memoria (`-XX:MaxRAMPercentage=75`).
-- No copiar `data/` ni `.env` dentro de la imagen.
-- Fijar la imagen base por digest en la implementación real.
-- Definir `SPRING_PROFILES_ACTIVE` como `pre` o `prod` en el orquestador, no en la imagen.
-
-### 5.2 Frontend
-
-```dockerfile
-# Borrador conceptual, no implementado.
-FROM node:24-alpine AS build
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-ARG VITE_API_BASE_URL=/api/v1
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
-RUN npm run build
-
-FROM nginx:1.27-alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
+```powershell
+.\deploy\docker\construir.ps1 -Entorno pro -Registro ghcr.io/pedrojaen
 ```
 
-`nginx.conf` debe incluir:
+## 5. Docker Compose para PRE y PRO
 
-- Fallback de SPA: `try_files $uri $uri/ /index.html;`.
-- Proxy opcional de `/api` al servicio `back`.
-- Cabeceras de seguridad básicas.
-- Compresión y caché para assets con hash.
+El fichero `deploy/docker/docker-compose.yml` se parametriza con
+`deploy/docker/.env.<entorno>`. Las credenciales son obligatorias: Compose falla con un mensaje claro
+si falta alguna.
 
-## 6. Configuración por entorno
+```powershell
+.\deploy\docker\levantar.ps1 -Entorno pre -Reconstruir
+.\deploy\docker\levantar.ps1 -Entorno pro -Reconstruir
+```
 
-### 6.1 Backend
+| Entorno | Frontend | API directa | Perfil | TTL | Red y volumen |
+| --- | --- | --- | --- | --- | --- |
+| PRE | `http://localhost:8088` | `http://localhost:8081` | `pre` | `10m` | `pruebasopencode1-pre_*` |
+| PRO | `http://localhost:8098` | `http://localhost:8091` | `prod` | `5m` | `pruebasopencode1-pro_*` |
+
+Ambos entornos pueden ejecutarse a la vez: usan proyectos, contenedores, redes y volúmenes distintos.
+
+Comprobaciones:
+
+```powershell
+Invoke-RestMethod http://localhost:8081/actuator/health
+Invoke-WebRequest http://localhost:8088/healthz -UseBasicParsing
+$login = Invoke-RestMethod -Method Post http://localhost:8088/api/v1/auth/login `
+  -ContentType "application/json" `
+  -Body (@{ usuario = "demo"; contrasena = "demo1234" } | ConvertTo-Json)
+Invoke-RestMethod http://localhost:8088/api/v1/personas `
+  -Headers @{ Authorization = "Bearer $($login.token)" }
+```
+
+Parada:
+
+```powershell
+.\deploy\docker\parar.ps1 -Entorno pre
+.\deploy\docker\parar.ps1 -Entorno pro -EliminarDatos
+```
+
+## 6. Kubernetes
+
+### 6.1 Recursos base
+
+| Recurso | Nombre | Uso |
+| --- | --- | --- |
+| `ConfigMap` | `pruebasopencode1-config` | Variables no sensibles por entorno. |
+| `Secret` | `pruebasopencode1-secrets` | `DB_USERNAME`, `DB_PASSWORD`, `APP_AUTH_USERNAME`, `APP_AUTH_PASSWORD`. |
+| `PersistentVolumeClaim` | `back-data` | Datos H2 (`/app/data`), `ReadWriteOnce`, 1 Gi. |
+| `Deployment` | `back` | 1 réplica, estrategia `Recreate`, usuario 10001, root FS de solo lectura y `/tmp` efímero. |
+| `Deployment` | `front` | Nginx, 1 réplica en PRE y 2 en PRO, `RollingUpdate`. |
+| `Service` | `back` | Puerto 8080 interno. |
+| `Service` | `front` | Puerto 80 interno. |
+| `Ingress` | `pruebasopencode1` | Entrada HTTP/HTTPS al frontend. |
+| `HorizontalPodAutoscaler` | `front` (PRO) | 2–4 réplicas al 70 % de CPU. |
+| `PodDisruptionBudget` | `front` (PRO) | Al menos 1 réplica disponible. |
+
+El backend usa:
+
+- `startupProbe` sobre `/actuator/health/liveness`.
+- `livenessProbe` sobre `/actuator/health/liveness`.
+- `readinessProbe` sobre `/actuator/health/readiness`.
+- `resources` 250m/512Mi y límites 1 CPU/1 Gi.
+- `securityContext` sin root, sin escalada de privilegios, `seccomp` y `drop: ALL`.
+
+### 6.2 Namespaces y secretos
+
+```powershell
+kubectl apply -f deploy/k8s/overlays/pre/namespace.yaml
+kubectl -n pruebasopencode1-pre create secret generic pruebasopencode1-secrets `
+  --from-literal=DB_USERNAME=sa `
+  --from-literal=DB_PASSWORD='...' `
+  --from-literal=APP_AUTH_USERNAME='...' `
+  --from-literal=APP_AUTH_PASSWORD='...'
+```
+
+Los ficheros `secret.example.yaml` son plantillas y **no** están incluidos en la kustomization. No se
+versionan secretos reales.
+
+### 6.3 Despliegue
+
+```powershell
+kubectl kustomize deploy/k8s/overlays/pre > pre-render.yaml
+kubectl apply -k deploy/k8s/overlays/pre
+kubectl -n pruebasopencode1-pre rollout status deployment/back
+kubectl -n pruebasopencode1-pre rollout status deployment/front
+```
+
+Para PRO:
+
+```powershell
+kubectl apply -f deploy/k8s/overlays/pro/namespace.yaml
+kubectl -n pruebasopencode1-pro create secret generic pruebasopencode1-secrets ...
+kubectl apply -k deploy/k8s/overlays/pro
+```
+
+Antes de aplicar en un clúster real:
+
+- Publicar las imágenes en un registro y ajustar `images.newName` en el overlay.
+- Crear los secretos TLS `pruebasopencode1-pre-tls` y `pruebasopencode1-pro-tls`, o adaptar el
+  Ingress.
+- Cambiar los hosts `*.pruebasopencode1.example.com` por los dominios reales.
+- Confirmar la `StorageClass` del PVC.
+- Verificar que el Ingress Controller es `nginx` o cambiar `ingressClassName`.
+
+## 7. Configuración por entorno
+
+### 7.1 Backend
 
 | Variable | PRE | PRO |
 | --- | --- | --- |
 | `SPRING_PROFILES_ACTIVE` | `pre` | `prod` |
-| `SERVER_PORT` | `8080` | `8080` |
-| `DB_URL` | URL de la base de datos de PRE | URL de la base de datos de PRO |
-| `DB_USERNAME` / `DB_PASSWORD` | Desde `Secret` | Desde `Secret` |
-| `JPA_DDL_AUTO` | `validate` o `update` controlado | `validate` |
+| `DB_URL` | `jdbc:h2:file:/app/data/pruebasopencode1` | Igual |
+| `DB_USERNAME` / `DB_PASSWORD` | `Secret` | `Secret` |
+| `JPA_DDL_AUTO` | `update` | `update` |
 | `H2_CONSOLE_ENABLED` | `false` | `false` |
-| `CORS_ALLOWED_ORIGINS` | Dominio del frontend de PRE | Dominio del frontend de PRO |
-| `SEED_MOCK_DATA` | `false` | `false` |
-| `APP_AUTH_USERNAME` / `APP_AUTH_PASSWORD` | Desde `Secret` | Desde `Secret` |
-| `APP_AUTH_ROLE` | `USER` | `USER` |
-| `APP_AUTH_TOKEN_TTL` | `10m` (valor del perfil) | `5m` (valor del perfil) |
 | `SPRINGDOC_ENABLED` | `false` | `false` |
-| `LOG_LEVEL` | `INFO` | `INFO` |
+| `SEED_MOCK_DATA` | `false` | `false` |
+| `CORS_ALLOWED_ORIGINS` | Dominio de PRE | Dominio de PRO |
+| `APP_AUTH_USERNAME` / `APP_AUTH_PASSWORD` | `Secret` | `Secret` |
+| `APP_AUTH_ROLE` | `USER` | `USER` |
+| `APP_AUTH_TOKEN_TTL` | `10m` | `5m` |
+| `LOG_LEVEL` | `INFO` | `WARN` |
 
-`application-pre.yml` y `application-pro.yml` contienen solo valores no sensibles; los secretos
-siempre se inyectan desde el orquestador (`Secret` de Kubernetes). Ningún secreto debe viajar en la
-imagen ni en el repositorio.
-
-### 6.2 Frontend
+### 7.2 Frontend
 
 | Variable | PRE | PRO |
 | --- | --- | --- |
-| `VITE_API_BASE_URL` | `https://api.pre.pruebasopencode1.example.com/api/v1` | `https://api.pruebasopencode1.example.com/api/v1` |
-| `VITE_AUTH_USERNAME` / `VITE_AUTH_PASSWORD` | Credenciales de demostración de PRE | Credenciales reales inyectadas en el build |
+| `VITE_API_BASE_URL` | `/api/v1` | `/api/v1` |
+| `VITE_AUTH_USERNAME` / `VITE_AUTH_PASSWORD` | Deben coincidir con el `Secret` | Deben coincidir con el `Secret` |
 
-Al ser variables de compilación, se pasan como `ARG` en la imagen y se genera una imagen por entorno (o
-una imagen parametrizada en el pipeline). Las credenciales del autologin viajan en el bundle del
-navegador: en un despliegue real habría que sustituir el autologin por un flujo de autenticación
-individual antes de usar PRO.
+`VITE_API_BASE_URL` es relativa porque Nginx proxifica `/api`. Las credenciales `VITE_AUTH_*` se
+incrustan al construir la imagen: si cambian en el secreto, hay que reconstruir el frontend.
 
-## 7. Tokens y estado en un despliegue con varias réplicas
+## 8. Persistencia H2 y copias
 
-El backend es **sin estado de sesión**, pero guarda los tokens Bearer en memoria (`TokenService`). Por
-tanto:
+- El backend escribe en `/app/data/pruebasopencode1.mv.db` dentro del PVC.
+- Solo puede existir **una** instancia del backend sobre el volumen. Por eso `replicas: 1` y
+  `strategy: Recreate`.
+- El volumen es `ReadWriteOnce`; no se puede montar simultáneamente en varios nodos.
+- Copia de seguridad: ejecutar un `Job` que detenga el pod o use la herramienta de H2 para backup, y
+  copiar el `.mv.db` a almacenamiento seguro. El fichero contiene datos personales y hashes BCrypt.
+- Para PRO con alta disponibilidad, la evolución recomendada es una base de datos externa
+  (PostgreSQL gestionado) y migraciones Flyway/Liquibase. El código ya está desacoplado por JPA, pero
+  el cambio exige autorización expresa porque el alcance actual especifica H2.
 
-- Una sola réplica funciona sin cambios: cada token vive en su proceso hasta caducar o revocarse.
-- Con **varias réplicas**, una petición puede llegar a un proceso que no conoce el token y devolver
-  `401`. El frontend reintenta de forma transparente, pero conviene evitarlo.
+## 9. Tokens y escalado
 
-Opciones para PRE/PRO, a decidir en la siguiente fase:
+El backend guarda los tokens Bearer en memoria. El frontend escala sin problema, pero el backend no:
 
-1. **Afianzar una única réplica** para el backend mientras se mantiene el modelo actual.
-2. **Almacén compartido de tokens** (por ejemplo Redis) accesible por todas las réplicas.
-3. **JWT firmados** con clave gestionada por el orquestador, sin almacenamiento de sesión.
-4. **Sesiones pegajosas** en el Ingress (parcial y no recomendado como solución definitiva).
+- Con 1 réplica, cada token vive en su proceso hasta caducar o revocarse.
+- Con varias réplicas, una petición puede llegar a un proceso que no conoce el token y devolver
+  `401`. El frontend reintenta, pero no es una solución definitiva.
 
-En esta fase no se implementa ninguna; el diseño queda abierto y documentado en
-[`SEGURIDAD.md`](SEGURIDAD.md).
+Opciones futuras: almacén compartido (Redis), JWT firmados o sesiones pegajosas. En esta fase se
+mantiene una réplica de backend y se documenta la limitación.
 
-## 8. Kubernetes: recursos previstos
+## 10. Pipeline previsto
 
-| Recurso | Uso |
-| --- | --- |
-| `Namespace` | Aislamiento por entorno (`pruebasopencode1-pre`, `pruebasopencode1-pro`). |
-| `Deployment` (back) | Réplicas del backend, variables desde `ConfigMap`/`Secret`. |
-| `Service` (back) | Exposición interna en el puerto 8080. |
-| `Deployment` (front) | Réplicas de Nginx con los estáticos. |
-| `Service` (front) | Exposición interna en el puerto 80. |
-| `Ingress` | TLS y enrutamiento por dominio; `/api` al backend si no hay proxy en Nginx. |
-| `ConfigMap` | Variables no sensibles por entorno. |
-| `Secret` | Credenciales de base de datos y de autenticación. |
-| `HorizontalPodAutoscaler` | Escalado por CPU/memoria en PRO. |
-| `PodDisruptionBudget` | Disponibilidad durante actualizaciones en PRO. |
-| `NetworkPolicy` | Restringir tráfico al backend y a la base de datos. |
-
-### 8.1 Sondas
-
-El backend ya expone las sondas necesarias:
-
-```yaml
-livenessProbe:
-  httpGet:
-    path: /actuator/health/liveness
-    port: 8080
-  initialDelaySeconds: 30
-  periodSeconds: 10
-
-readinessProbe:
-  httpGet:
-    path: /actuator/health/readiness
-    port: 8080
-  initialDelaySeconds: 20
-  periodSeconds: 5
-```
-
-El frontend puede usar una sonda HTTP a `/` en el puerto 80.
-
-### 8.2 Recursos orientativos
-
-```yaml
-resources:
-  requests:
-    cpu: 250m
-    memory: 512Mi
-  limits:
-    cpu: "1"
-    memory: 1Gi
-```
-
-Ajustar con métricas reales. En PRO se recomienda un mínimo de dos réplicas del backend y del
-frontend, teniendo en cuenta la limitación de tokens en memoria descrita en el apartado 7.
-
-## 9. Gestión de la base de datos
-
-La configuración actual usa H2 en fichero, adecuada para desarrollo local. Para PRE/PRO hay dos
-opciones:
-
-1. **H2 sobre volumen persistente** con una sola réplica y `Recreate`.
-   - Sencillo y fiel al alcance actual.
-   - No admite escalado horizontal ni alta disponibilidad.
-   - Requiere `PersistentVolumeClaim` y copias de seguridad.
-2. **Base de datos externa** (por ejemplo PostgreSQL) mediante un servicio gestionado.
-   - Recomendado para PRO por robustez, copias y escalado.
-   - Implica una decisión técnica y autorización expresa, ya que el proyecto especifica H2.
-   - El código ya está desacoplado por JPA; el cambio principal sería el driver, la URL y las
-     migraciones (Flyway/Liquibase).
-
-En esta fase no se decide ni se implementa ese cambio.
-
-## 10. Pipeline de entrega previsto
-
-1. **Integración continua**
-   - Backend: `./mvnw -B clean verify`.
-   - Frontend: `npm ci && npm run build`.
-   - Análisis estático y escaneo de dependencias.
-2. **Construcción de imágenes**
-   - Etiquetado por commit y versión semántica.
-   - Escaneo de vulnerabilidades.
-3. **Publicación**
-   - Registro de imágenes corporativo.
-4. **Despliegue en PRE**
-   - Aplicar overlay `pre`, ejecutar pruebas de humo.
-5. **Promoción a PRO**
-   - Aprobación manual.
-   - Aplicar overlay `pro` con estrategia `RollingUpdate`.
-   - Verificar sondas y métricas; posibilidad de rollback a la versión anterior.
+1. CI: `mvnw -B clean verify`, `npm ci && npm run build` y `node scripts/verificar-despliegue.mjs`.
+2. Construcción de imágenes etiquetadas por commit y versión.
+3. Escaneo de vulnerabilidades y publicación en el registro.
+4. Despliegue automático en PRE y pruebas de humo.
+5. Promoción manual a PRO, con `RollingUpdate` en el frontend y `Recreate` en el backend.
+6. Verificación de sondas, logs y métricas; rollback a la etiqueta anterior si falla.
 
 ## 11. Diferencias PRE / PRO
 
 | Aspecto | PRE | PRO |
 | --- | --- | --- |
 | Perfil | `pre` | `prod` |
-| Réplicas | 1 | ≥ 2 |
-| Datos | Datos de prueba | Datos reales |
-| `SEED_MOCK_DATA` | `false` | `false` |
-| Consola H2 | Deshabilitada | Deshabilitada |
-| Swagger | Deshabilitado | Deshabilitado |
+| Namespace | `pruebasopencode1-pre` | `pruebasopencode1-pro` |
+| Réplicas frontend | 1 | 2–4 (HPA) |
+| Réplicas backend | 1 | 1 (limitación H2) |
 | TTL del token | `10m` | `5m` |
-| TLS | Sí (certificado de pruebas) | Sí (certificado válido) |
-| Recursos | Ajustados | Dimensionados con métricas |
-| Copias de seguridad | Opcionales | Obligatorias |
-| Monitorización | Básica | Completa (métricas, logs, alertas) |
+| Log | `INFO` | `WARN` |
+| TLS | Certificado de pruebas | Certificado válido |
 | Aprobación de despliegue | Automática | Manual |
+| Copias de seguridad | Opcionales | Obligatorias |
 
-## 12. Pasos pendientes para una implantación real
+## 12. Verificación realizada
 
-- [ ] Crear los Dockerfiles definitivos y `.dockerignore`.
-- [ ] Crear `nginx.conf` con fallback SPA y proxy.
-- [ ] Crear los manifiestos base de Kubernetes y los overlays PRE/PRO.
-- [ ] Definir la estrategia de base de datos para cada entorno.
-- [ ] Decidir la estrategia de tokens para múltiples réplicas (apartado 7).
-- [ ] Sustituir el autologin por autenticación individual antes de usar PRO.
-- [ ] Configurar registro de imágenes, pipeline CI/CD y escaneo de seguridad.
-- [ ] Configurar dominios, TLS, DNS y firewall.
-- [ ] Definir políticas de copias de seguridad y retención.
-- [ ] Configurar logs centralizados, métricas y alertas.
-- [ ] Ejecutar pruebas de carga y de recuperación.
-- [ ] Documentar el runbook de operación y rollback.
+El 2026-11-09 se comprobó:
+
+| Comprobación | Resultado |
+| --- | --- |
+| Construcción de `pruebasopencode1-back:pre` | Correcta |
+| Construcción de `pruebasopencode1-front:pre` | Correcta (Vite + documentación viva) |
+| Construcción de `pruebasopencode1-back:pro` | Correcta |
+| Construcción de `pruebasopencode1-front:pro` | Correcta |
+| Compose PRE: contenedores y sondas | 2/2 `healthy` |
+| Compose PRO: contenedores y sondas | 2/2 `healthy` |
+| SPA por Nginx (PRE y PRO) | `200`, fallback de rutas y assets |
+| API por proxy `/api` | Login, CRUD, `401` sin token y auditoría |
+| Perfil y TTL | PRE `pre`/`10m`; PRO `prod`/`5m` (299 s reales) |
+| Persistencia H2 | Datos conservados tras reiniciar el backend |
+| Kustomize PRE y PRO | Renderizado correcto |
+| Verificación automática de despliegue | **40/40 comprobaciones** |
+
+No se ejecutó `kubectl apply` porque el entorno no tenía un contexto de clúster configurado.
+
+## 13. Pasos pendientes para una implantación real
+
+- [ ] Configurar un clúster y un contexto de Kubernetes.
+- [ ] Publicar las imágenes en un registro accesible.
+- [ ] Sustituir los hosts y certificados de ejemplo.
+- [ ] Crear los secretos reales en cada namespace.
+- [ ] Decidir la base de datos definitiva para PRO (H2 con PVC o PostgreSQL).
+- [ ] Sustituir el autologin por autenticación individual antes de PRO.
+- [ ] Resolver el estado compartido de tokens si el backend escala.
+- [ ] Configurar CI/CD, escaneo de imágenes y políticas de red.
+- [ ] Definir copias de seguridad, retención, métricas, logs y alertas.
+- [ ] Ejecutar pruebas de carga, recuperación y rollback.

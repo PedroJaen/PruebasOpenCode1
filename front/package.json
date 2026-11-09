@@ -12,7 +12,8 @@
     "docs": "node scripts/generar-documentacion.mjs",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
-    "test:ui": "node scripts/verificar-ui.mjs"
+    "test:ui": "node scripts/verificar-ui.mjs",
+    "test:deploy": "node ../scripts/verificar-despliegue.mjs"
   },
   "dependencies": {
     "react": "^19.1.1",

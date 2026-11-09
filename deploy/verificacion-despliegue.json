@@ -1,0 +1,248 @@
+{
+  "fecha": "2026-11-09",
+  "total": 40,
+  "superadas": 40,
+  "fallidas": 0,
+  "comprobaciones": [
+    {
+      "nombre": "Existe deploy/docker/back.Dockerfile",
+      "comando": "Test-Path",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "Existe deploy/docker/front.Dockerfile",
+      "comando": "Test-Path",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "Existe deploy/docker/nginx.conf",
+      "comando": "Test-Path",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "Existe deploy/docker/docker-compose.yml",
+      "comando": "Test-Path",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "Existe deploy/docker/.env.pre.example",
+      "comando": "Test-Path",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "Existe deploy/docker/.env.pro.example",
+      "comando": "Test-Path",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "Existe deploy/k8s/base/kustomization.yaml",
+      "comando": "Test-Path",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "Existe deploy/k8s/overlays/pre/kustomization.yaml",
+      "comando": "Test-Path",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "Existe deploy/k8s/overlays/pro/kustomization.yaml",
+      "comando": "Test-Path",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "Backend multi-stage + JRE 21 + usuario no root",
+      "comando": "Dockerfile",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "Frontend multi-stage + Nginx sin privilegios",
+      "comando": "Dockerfile",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "Nginx: SPA, proxy /api y salud",
+      "comando": "nginx.conf",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": ".dockerignore excluye secretos y artefactos",
+      "comando": ".dockerignore",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "Docker Compose PRE válido",
+      "comando": "docker compose --env-file .env.pre.example config",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "Docker Compose PRO válido",
+      "comando": "docker compose --env-file .env.pro.example config",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "Kustomize PRE renderiza",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "  namespace en PRE",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "  ConfigMap en PRE",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "  2 Deployments en PRE",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "  2 Services en PRE",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "  PVC en PRE",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "  Ingress en PRE",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "  perfil en PRE",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "  imagen back en PRE",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "  imagen front en PRE",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "  sin Secret versionado en PRE",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "Kustomize PRO renderiza",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "  namespace en PRO",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "  ConfigMap en PRO",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "  2 Deployments en PRO",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "  2 Services en PRO",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "  PVC en PRO",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "  Ingress en PRO",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "  perfil en PRO",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "  imagen back en PRO",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "  imagen front en PRO",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "  sin Secret versionado en PRO",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "PRO: HPA, PDB y 2 réplicas de frontend",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "PRO: backend con una única réplica y estrategia Recreate",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    },
+    {
+      "nombre": "PRE: backend con una única réplica y estrategia Recreate",
+      "comando": "kubectl kustomize",
+      "resultado": "Superada",
+      "detalle": ""
+    }
+  ]
+}

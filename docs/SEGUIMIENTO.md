@@ -2,7 +2,7 @@
 
 > Última actualización: 2026-11-09
 > Última verificación funcional: 2026-11-09
-> Estado global: **Completado (fase local)**
+> Estado global: **Completado (local y despliegue PRE/PRO preparado)**
 
 ## 1. Plan de implementación y estado
 
@@ -122,6 +122,23 @@
 - [x] Actualizar las suites de integración (18) y UI (14) al modelo Bearer y al tema oscuro.
 - [x] Reescribir `docs/SEGURIDAD.md`, `API.md`, `ARQUITECTURA.md`, `EJECUCION.md`, `PRUEBAS.md` y `PROMPT.md`.
 
+### Fase 12. Publicación y despliegue PRE/PRO
+
+- [x] Publicar el proyecto en el repositorio público `https://github.com/PedroJaen/PruebasOpenCode1`.
+- [x] Añadir `.dockerignore` y dos Dockerfiles multi-stage: backend JRE 21 sin root y frontend Nginx sin privilegios.
+- [x] Configurar Nginx con fallback de SPA, proxy `/api` a `back:8080`, `/healthz` y cabeceras de seguridad.
+- [x] Crear `deploy/docker/docker-compose.yml` parametrizado por entorno, con red y volumen H2 propios.
+- [x] Añadir las plantillas `.env.pre.example` y `.env.pro.example` y los scripts `construir.ps1`, `levantar.ps1` y `parar.ps1`.
+- [x] Crear la base Kustomize y los overlays `pre` y `pro`, con namespaces, ConfigMap, PVC, Ingress, TLS, HPA y PDB.
+- [x] Mantener una sola réplica de backend y estrategia `Recreate` por la limitación de H2 en fichero.
+- [x] Crear `scripts/verificar-despliegue.mjs` y el comando `npm run test:deploy` (**40 comprobaciones**).
+- [x] Integrar la tabla de despliegue en la documentación viva (`/documentacion`).
+- [x] Construir las cuatro imágenes y probar PRE y PRO con Docker Compose.
+- [x] Verificar en contenedores: SPA, fallback, assets, login, CRUD, `401` sin token, perfiles y TTL.
+- [x] Verificar la persistencia de H2 tras reiniciar el backend.
+- [x] Renderizar ambos overlays con `kubectl kustomize` y validar Compose con `docker compose config`.
+- [x] Actualizar `README.md`, `AGENTS.md`, `DESPLIEGUE.md`, `ARQUITECTURA.md`, `EJECUCION.md`, `PRUEBAS.md`, `OPERACION.md`, `PROMPT.md` y `deploy/README.md`.
+
 ## 2. Resultados de verificación (2026-11-09)
 
 | Comprobación | Comando | Resultado |
@@ -133,6 +150,11 @@
 | Interfaz real en navegador | `npm.cmd run test:ui` (en `/front`) | **14/14 comprobaciones**, sin errores de consola |
 | Mutation testing | `back\mvnw.cmd -B test-compile org.pitest:pitest-maven:mutationCoverage` | **BUILD SUCCESS** · 21/21 mutaciones, 100 % de detección y 48/50 (96 %) de cobertura |
 | Documentación viva | `npm run build` + Chrome headless sobre Vite | **Correcta** · secciones, tablas de resultados y consola sin errores |
+| Verificación de despliegue | `node scripts\verificar-despliegue.mjs` | **40/40 comprobaciones** |
+| Imágenes Docker | `back:pre`, `front:pre`, `back:pro`, `front:pro` | **4/4 construidas** correctamente |
+| Compose PRE | `.\deploy\docker\levantar.ps1 -Entorno pre` | **2/2 contenedores `healthy`** · SPA, API, login, CRUD, `401` y persistencia H2 |
+| Compose PRO | `.\deploy\docker\levantar.ps1 -Entorno pro` | **2/2 contenedores `healthy`** · perfil `prod`, TTL 299 s y CRUD |
+| Kustomize PRE/PRO | `kubectl kustomize deploy/k8s/overlays/<entorno>` | **Renderizado correcto** · namespaces, perfiles e imágenes |
 | Migración de esquema heredado | JAR nuevo sobre H2 con columna `edad` | **Correcta** · columna eliminada, CRUD operativo y edad recalculada |
 | Render en Chrome headless | `chrome --headless --dump-dom` | 10 filas de personas renderizadas |
 
@@ -193,6 +215,25 @@ A través de `http://127.0.0.1:5173/api/v1` (proxy de Vite → backend):
 
 La página `/documentacion` se verifica por separado con una comprobación de navegador real.
 
+### Despliegue verificado
+
+Con Docker 28.0.1 y Compose v2.33.1:
+
+1. Las cuatro imágenes compilan: `pruebasopencode1-back:pre`, `pruebasopencode1-front:pre`,
+   `pruebasopencode1-back:pro` y `pruebasopencode1-front:pro`.
+2. PRE arranca en `8088` (frontend) y `8081` (API directa) con perfil `pre` y TTL `10m`.
+3. PRO arranca en `8098` (frontend) y `8091` (API directa) con perfil `prod` y TTL `5m` (299 s reales).
+4. Nginx sirve la SPA, aplica el fallback de rutas y devuelve `200` en `/healthz`.
+5. El proxy `/api` funciona: login, listado, creación, eliminación y `401` sin token.
+6. El backend y el frontend quedan `healthy` en ambos entornos.
+7. H2 conserva los datos tras reiniciar el contenedor del backend.
+8. `kubectl kustomize` renderiza PRE y PRO con namespaces, ConfigMap, PVC, Deployments, Services,
+   Ingress, y en PRO también HPA y PDB.
+9. `docker compose config --quiet` valida ambas plantillas de entorno.
+10. La suite `scripts/verificar-despliegue.mjs` supera **40/40 comprobaciones**.
+
+No se ejecutó `kubectl apply` porque el entorno no tenía un contexto de Kubernetes configurado.
+
 ## 3. Decisiones técnicas
 
 | Fecha | Decisión | Justificación |
@@ -221,6 +262,14 @@ La página `/documentacion` se verifica por separado con una comprobación de na
 | 2026-11-09 | Perfiles `dev`/`test`/`pre`/`prod` con secretos externalizados | Evita secretos versionados y permite cambiar de entorno sin tocar código. |
 | 2026-11-09 | Tema oscuro con preferencia `sistema` | Mejora la accesibilidad y respeta la preferencia del sistema, persistida en `localStorage`. |
 | 2026-11-09 | `ErrorBoundary` en React | Evita que un error de renderizado deje la aplicación en blanco. |
+| 2026-11-09 | Dos imágenes Docker independientes | Backend y frontend tienen ciclos de vida y escalado distintos; se evita acoplar sus builds. |
+| 2026-11-09 | Nginx sin privilegios sirve la SPA y proxifica `/api` | La interfaz y la API comparten origen; no se necesita CORS para el tráfico del navegador. |
+| 2026-11-09 | Backend sin root (UID 10001) y root FS de solo lectura | Reduce la superficie de ataque; `/app/data` y `/tmp` se montan explícitamente. |
+| 2026-11-09 | Imagen de backend única para PRE y PRO | Perfil, base de datos, CORS y secretos se inyectan en tiempo de ejecución. |
+| 2026-11-09 | Frontend construido por entorno | `VITE_AUTH_*` se incrusta en el bundle, así que cada entorno tiene su propia etiqueta. |
+| 2026-11-09 | Kustomize base + overlays PRE/PRO | Evita duplicar manifiestos y hace explícitas las diferencias de entorno. |
+| 2026-11-09 | H2 sobre PVC, 1 réplica de backend y `Recreate` | H2 en fichero no admite escrituras concurrentes de varias instancias. |
+| 2026-11-09 | Secretos fuera de Git y de las kustomizations | Se crean con `kubectl create secret` o se leen de `.env.<entorno>`; nunca se versionan. |
 
 ## 4. Entorno de verificación
 
@@ -240,6 +289,9 @@ La página `/documentacion` se verifica por separado con una comprobación de na
 | TypeScript | 5.9.3 |
 | Vite | 7.3.7 |
 | Playwright Core | 1.65.0 |
+| Docker | 28.0.1 |
+| Docker Compose | v2.33.1 |
+| kubectl / Kustomize | 1.32.2 / v5.5.0 |
 
 > El entorno inicial solo tenía Java 17 y no tenía Maven. Para verificar se descargaron JDK 21 y
 > Maven 3.9.16 en `C:\Users\Nagasia\.opencode-tools`, fuera del repositorio. El proyecto usa Maven
@@ -253,7 +305,8 @@ La página `/documentacion` se verifica por separado con una comprobación de na
 - **Maven no instalado:** se generó Maven Wrapper con distribución 3.9.16. El primer build descarga
   Maven y las dependencias.
 - **Política de PowerShell:** `npm.ps1` está bloqueado; se usó `npm.cmd`. Documentado en
-  `docs/EJECUCION.md`.
+  `docs/EJECUCION.md`. La ejecución de los `.ps1` de despliegue también puede requerir
+  `powershell -ExecutionPolicy Bypass -File` o los comandos `docker compose` equivalentes.
 - **Aviso de npm sobre scripts de instalación:** npm mostró un aviso sobre el `postinstall` de
   esbuild. No impidió la instalación ni el build; Vite funcionó correctamente.
 - **Eclipse y VS Code no instalados:** no se pudieron abrir literalmente los IDEs. Se validó el
@@ -294,6 +347,23 @@ La página `/documentacion` se verifica por separado con una comprobación de na
   (`ObjectOptimisticLockingFailureException`) porque ambas hacen reset sobre las mismas filas. Se
   documenta que deben ejecutarse secuencialmente: primero integración y después interfaz.
 - **`hola.txt`:** se conservó el archivo existente en la raíz, ya que el usuario pidió no eliminarlo.
+- **Docker Desktop detenido (2026-11-09):** el CLI estaba instalado pero el motor no respondía. Se
+  inició Docker Desktop y se esperó a que el motor estuviera operativo antes de construir y probar.
+- **Sin contexto de Kubernetes (2026-11-09):** `kubectl config current-context` no devolvía ningún
+  contexto, por lo que no se pudo ejecutar `kubectl apply`. La validación se hizo con
+  `kubectl kustomize` y `docker compose config`, que no requieren clúster.
+- **Falso negativo en la persistencia H2 (2026-11-09):** una primera comprobación tras reiniciar
+  mostró 0 personas por una lectura prematura; repetida con `restart` y espera suficiente, conservó
+  los datos. Se documenta para no repetir la lectura antes de que el backend esté listo.
+- **H2 y concurrencia (2026-11-09):** H2 en fichero no admite varias instancias sobre el mismo
+  volumen. El despliegue fija `replicas: 1` y `strategy: Recreate`; para escalar el backend hace falta
+  una base de datos externa.
+- **Tokens en memoria y varias réplicas (2026-11-09):** el frontend puede escalar, pero el backend no
+  comparte los tokens entre procesos. Se mantiene una réplica y se documentan Redis/JWT/sesiones
+  pegajosas como evolución.
+- **Autologin en el bundle (2026-11-09):** las credenciales `VITE_AUTH_*` quedan visibles en el
+  bundle. Es válido para la demo y PRE, pero antes de PRO hay que sustituirlo por autenticación
+  individual.
 
 ## 6. Problemas pendientes y limitaciones conocidas
 
@@ -304,16 +374,20 @@ No hay problemas bloqueantes para el alcance actual. Limitaciones y siguientes p
    individual, HTTPS, gestión de secretos y una revisión de CSRF; el plan está en `docs/SEGURIDAD.md`.
 2. **Tokens en memoria de una sola instancia:** con varias réplicas habría que compartir el
    almacenamiento de tokens o migrar a JWT firmados. Se documenta en `docs/DESPLIEGUE.md`.
-3. **Despliegue real:** Docker y Kubernetes están diseñados en `docs/DESPLIEGUE.md`, pero no
-   implementados, tal y como se solicitó.
-4. **Base de datos para PRE/PRO:** H2 en fichero no es adecuada para múltiples réplicas. Habrá que
-   decidir entre H2 con volumen persistente y una base de datos externa (requiere autorización).
-5. **Pruebas unitarias de componentes React:** se cubren con build de tipos y pruebas E2E de
+3. **Despliegue real:** las imágenes y los manifiestos de Docker y Kubernetes están implementados y
+   validados, pero no se ha aplicado sobre un clúster por no haber contexto configurado.
+4. **Base de datos para PRE/PRO:** H2 en fichero no es adecuada para múltiples réplicas. El despliegue
+   actual usa un PVC y una sola réplica; para alta disponibilidad habrá que decidir una base externa
+   (requiere autorización).
+5. **Registro, hosts y TLS:** los overlays usan imágenes locales y hosts `*.pruebasopencode1.example.com`
+   de ejemplo. Antes de desplegar hay que publicar las imágenes y sustituir hosts, certificados y
+   `StorageClass`.
+6. **Pruebas unitarias de componentes React:** se cubren con build de tipos y pruebas E2E de
    navegador; se podría añadir Vitest/Testing Library si se requiere cobertura unitaria del frontend.
-6. **Migraciones de esquema:** se usa `ddl-auto=update` en desarrollo y `MigracionEsquema` para retirar
+7. **Migraciones de esquema:** se usa `ddl-auto=update` en desarrollo y `MigracionEsquema` para retirar
    la antigua columna `edad`. Para PRE/PRO conviene Flyway o Liquibase.
-7. **Internacionalización:** la interfaz está en español; no se ha implementado multiidioma.
-8. **Mutation testing:** PIT cubre solo el servicio y el mapper; controladores, entidades y
+8. **Internacionalización:** la interfaz está en español; no se ha implementado multiidioma.
+9. **Mutation testing:** PIT cubre solo el servicio y el mapper; controladores, entidades y
    configuración no se mutan. Todavía no está integrado en un pipeline de CI.
 
 ## 7. Cómo continuar
@@ -321,5 +395,7 @@ No hay problemas bloqueantes para el alcance actual. Limitaciones y siguientes p
 1. Revisar la aplicación siguiendo `docs/EJECUCION.md`.
 2. Repetir las verificaciones con los comandos de la sección 2, incluido PIT tras cambios en la
    lógica de negocio o el mapper, y ejecutar integración y UI en secuencia.
-3. Abordar las limitaciones de la sección 6 según prioridad.
-4. Cuando se autorice, implementar las imágenes y manifiestos descritos en `docs/DESPLIEGUE.md`.
+3. Ejecutar `node scripts\verificar-despliegue.mjs` tras cualquier cambio en `deploy/`.
+4. Abordar las limitaciones de la sección 6 según prioridad.
+5. Para un despliegue real: configurar un clúster, publicar las imágenes, crear los secretos y aplicar
+   los overlays PRE/PRO siguiendo `docs/DESPLIEGUE.md`.

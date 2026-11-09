@@ -36,6 +36,8 @@ Organizar el proyecto en los siguientes directorios:
 - /back: aplicación backend.
 - /front: aplicación frontend.
 - /docs: documentación general.
+- /deploy: imágenes Docker, Docker Compose y manifiestos Kubernetes (Kustomize) para PRE y PRO.
+- /scripts: verificaciones de integración y de preparación de despliegue.
 
 ## 4. Backend
 
@@ -150,19 +152,32 @@ El proyecto debe poder ejecutarse localmente de forma independiente:
 
 Documentar los comandos necesarios para instalar dependencias y ejecutar ambas aplicaciones.
 
-## 8. Preparación para despliegues futuros
+## 8. Despliegue en Docker y Kubernetes
 
-Aunque inicialmente se ejecutará en local, la arquitectura deberá facilitar su futura contenerización y despliegue.
+La aplicación debe poder compilarse y desplegarse en dos entornos sin modificar el código fuente:
 
-Preparar la documentación y estructura necesarias para una futura ejecución mediante:
+- **PRE**: preproducción.
+- **PRO**: producción.
 
-- Docker.
-- Kubernetes.
-- Entornos PRE y PRO.
+Mediante:
 
-No implementar ni simular despliegues reales en PRE o PRO en esta fase.
+- Docker y Docker Compose.
+- Kubernetes con Kustomize (base común y overlays `pre`/`pro`).
+- Perfiles de Spring y variables de entorno.
 
-Evitar configuraciones que obliguen a modificar el código fuente para cambiar de entorno.
+Requisitos:
+
+- Mantener las tecnologías obligatorias del proyecto (H2 incluida); no introducir otras sin autorización.
+- Dos imágenes independientes: backend JRE 21 sin root y frontend Nginx sin privilegios.
+- Configuración externalizada: perfil, base de datos, CORS, secretos y TTL del token por entorno.
+- Secretos fuera del repositorio; nunca versionar `.env`, contraseñas ni certificados reales.
+- H2 sobre volumen persistente, una sola réplica de backend y estrategia `Recreate`.
+- Sondas de salud reales: Actuator en el backend y `/healthz` en el frontend.
+- Validar los manifiestos sin necesidad de clúster con `node scripts/verificar-despliegue.mjs`.
+- Documentar las limitaciones conocidas (H2, tokens en memoria, autologin de demostración).
+
+No se debe afirmar que existe un despliegue real en PRE o PRO si no se ha ejecutado sobre un clúster
+y verificado.
 
 ## 9. Documentación y seguimiento
 
@@ -174,6 +189,8 @@ Mantener actualizados:
 - /docs/API.md: documentación de los endpoints.
 - /docs/PROMPT.md: prompt de reconstrucción de la aplicación.
 - /docs/PRUEBAS.md: estrategia, suites y resultados esperados.
+- /docs/DESPLIEGUE.md: imágenes, Compose, Kubernetes y diferencias PRE/PRO.
+- /deploy/README.md: guía rápida de construcción y despliegue.
 
 La página `/documentacion` del frontend se genera a partir de `AGENTS.md`, `docs/*.md`, los tests y los
 informes de pruebas. No duplicar su contenido a mano: tras cambiar cualquier fuente, ejecutar

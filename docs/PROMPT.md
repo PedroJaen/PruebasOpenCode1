@@ -27,6 +27,7 @@ No introduzcas tecnologías distintas sin autorización expresa. No utilices Ang
 - **Errores:** RFC 9457 (`application/problem+json`).
 - **Pruebas:** JUnit 5, Mockito, MockMvc, Spring Security Test, PIT (mutation testing), Node.js y
   Playwright Core.
+- **Despliegue:** Docker, Docker Compose, Kubernetes, Kustomize y Nginx sin privilegios.
 
 Versiones de referencia del estado actual:
 
@@ -103,8 +104,22 @@ PruebasOpenCode1/
 │   ├── PRUEBAS.md
 │   ├── SEGUIMIENTO.md
 │   └── SEGURIDAD.md
-└── scripts/
-    └── verificar-integracion.mjs
+├── deploy/
+│   ├── README.md
+│   ├── docker/
+│   │   ├── back.Dockerfile
+│   │   ├── front.Dockerfile
+│   │   ├── nginx.conf
+│   │   ├── docker-compose.yml
+│   │   ├── .env.pre.example / .env.pro.example
+│   │   └── construir.ps1 / levantar.ps1 / parar.ps1
+│   └── k8s/
+│       ├── base/               Recursos comunes
+│       └── overlays/pre|pro/   Namespace, ConfigMap, Ingress, TLS, HPA y PDB
+├── scripts/
+│   ├── verificar-integracion.mjs
+│   └── verificar-despliegue.mjs
+└── .dockerignore
 ```
 
 ## 4. Backend
@@ -337,7 +352,8 @@ La página `/documentacion` debe contener, como mínimo, estas secciones:
    - integración de extremo a extremo,
    - interfaz con navegador real,
    - mutation testing de PIT,
-   - compilación y tipos del frontend.
+   - compilación y tipos del frontend,
+   - verificación de despliegue Docker/Kubernetes.
 
 La página no debe duplicar manualmente el contenido de los documentos. Un script de generación
 (`front/scripts/generar-documentacion.mjs`) debe leer `AGENTS.md`, `docs/*.md`, los tests de Java, los
@@ -422,6 +438,34 @@ $env:JAVA_HOME = "C:\ruta\al\jdk-21"
 - Ejecutar primero la suite de integración y después la de interfaz: ambas hacen reset y no deben
   correr en paralelo.
 
+### 6.4 Despliegue
+
+Implementa Docker y Kubernetes para PRE y PRO:
+
+- `deploy/docker/back.Dockerfile`: multi-stage con Maven y JDK 21, y runtime `eclipse-temurin:21-jre`
+  con usuario sin privilegios (UID/GID 10001).
+- `deploy/docker/front.Dockerfile`: multi-stage con Node y Vite, y runtime
+  `nginxinc/nginx-unprivileged` en el puerto 8080.
+- `deploy/docker/nginx.conf`: fallback de SPA, proxy `/api/` a `http://back:8080`, `/healthz`,
+  cabeceras de seguridad y caché de assets con hash.
+- `deploy/docker/docker-compose.yml` parametrizado por `deploy/docker/.env.<entorno>`:
+  - PRE: frontend `8088`, API directa `8081`, perfil `pre`, TTL `10m`.
+  - PRO: frontend `8098`, API directa `8091`, perfil `prod`, TTL `5m`.
+  - Cada entorno usa su propio proyecto, red y volumen H2.
+- `deploy/k8s/base`: ConfigMap, PVC, Deployments, Services e Ingress comunes.
+- `deploy/k8s/overlays/pre`: namespace `pruebasopencode1-pre`, perfil `pre`, host y TLS de PRE.
+- `deploy/k8s/overlays/pro`: namespace `pruebasopencode1-pro`, perfil `prod`, 2 réplicas de frontend,
+  HPA (2–4 al 70 % de CPU), PDB y TLS de PRO.
+- Backend con 1 réplica, `Recreate`, usuario 10001, root FS de solo lectura, `/tmp` efímero, sondas
+  `liveness`/`readiness` y `drop: ALL`.
+- Secretos fuera de las kustomizations; se crean con `kubectl create secret`.
+- `scripts/verificar-despliegue.mjs`: valida Dockerfiles, Nginx, `.dockerignore`, Compose y Kustomize
+  sin necesitar un clúster. Debe superar **40/40 comprobaciones** y generar
+  `deploy/verificacion-despliegue.json` para la página `/documentacion`.
+- `front/package.json` expone `npm run test:deploy`.
+
+No se debe afirmar que hay un despliegue real si no se ha aplicado sobre un clúster y comprobado.
+
 ## 7. Documentación obligatoria
 
 Mantén actualizados, en español y con el nombre PruebasOpenCode1:
@@ -435,9 +479,10 @@ Mantén actualizados, en español y con el nombre PruebasOpenCode1:
   problemas.
 - `docs/PRUEBAS.md`: estrategia, alcance de cada suite, comandos y resultados esperados.
 - `docs/MANUAL_USUARIO.md`: guía de uso de la interfaz, incluido el tema.
-- `docs/OPERACION.md`: configuración, H2, copias, mantenimiento y diagnóstico.
-- `docs/DESPLIEGUE.md`: diseño previsto para Docker, Kubernetes y entornos PRE/PRO, sin implementar
-  despliegues reales.
+- `docs/OPERACION.md`: configuración, H2, copias, mantenimiento, diagnóstico y operación en Docker.
+- `docs/DESPLIEGUE.md`: imágenes, Docker Compose, Kubernetes y diferencias PRE/PRO implementados y
+  verificados; limitaciones de H2, tokens y autologin.
+- `deploy/README.md`: guía rápida de construcción y despliegue.
 - `docs/SEGUIMIENTO.md`: fases, tareas realizadas, resultados, incidencias y próximos pasos.
 - `docs/PROMPT.md`: este prompt.
 
@@ -476,6 +521,9 @@ No consideres la tarea terminada hasta comprobar que:
 - `node scripts\verificar-integracion.mjs` supera las 18 comprobaciones, incluido el `401` sin token,
   el autologin, la auditoría y la revocación tras el logout.
 - `front\npm run test:ui` supera las 14 comprobaciones sin errores de consola.
+- La verificación de despliegue supera las **40 comprobaciones** (`node scripts\verificar-despliegue.mjs`).
+- Docker Compose arranca PRE y PRO con contenedores `healthy`, login, CRUD y persistencia H2.
+- Kustomize renderiza ambos overlays con su namespace, perfil e imágenes, sin secretos versionados.
 - La API de personas devuelve `401` sin token; el autologin obtiene un token real y la contraseña
   está cifrada con BCrypt en H2.
 - Los errores usan `application/problem+json` con `type`, `title`, `status`, `detail` e `instance`.
@@ -485,7 +533,7 @@ No consideres la tarea terminada hasta comprobar que:
 - Los perfiles `dev`, `test`, `pre` y `prod` arrancan con configuración externalizada y sin secretos
   versionados.
 - La página `/documentacion` muestra el prompt, la documentación (incluida `SEGURIDAD.md`),
-  `AGENTS.md` y las tablas de resultados, y se actualiza al regenerar el contenido.
+  `AGENTS.md` y las 7 tablas de resultados, y se actualiza al regenerar el contenido.
 - No quedan datos simulados, secretos ni valores específicos de un entorno en el código.
 
 Informa al final de los cambios realizados, las pruebas ejecutadas y cualquier problema encontrado.
